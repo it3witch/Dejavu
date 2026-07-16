@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Déjà vu</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
+  <script src="./tailwind.config.js"></script>
+  <link rel="stylesheet" href="./styles.css" />
+  <script src="./config.js"></script>
+</head>
+<body>
+  <canvas id="lofiCanvas" aria-hidden="true"></canvas>
+  <div id="softVignette" class="soft-vignette" aria-hidden="true"></div>
+
+  <div class="app">
+    <header class="topbar">
+      <nav id="mainNav" class="nav" data-active="journal" aria-label="主菜单">
+        <div class="nav-indicator" aria-hidden="true"></div>
+        <button class="nav-button active" type="button" data-route="journal">
+          <i class="fa-solid fa-pen-nib"></i><span>记录</span>
+        </button>
+        <button class="nav-button" type="button" data-route="search">
+          <i class="fa-solid fa-magnifying-glass"></i><span>检索</span>
+        </button>
+        <button class="nav-button" type="button" data-route="square">
+          <i class="fa-solid fa-layer-group"></i><span>大厅</span>
+        </button>
+      </nav>
+    </header>
+
+    <main>
+      <section id="journalView" class="view active" data-view="journal">
+        <div class="journal-wrap">
+          <header class="journal-heading">
+            <h1 class="quiet-title">你梦到了什么？</h1>
+            <p class="journal-subtitle">写下你印象最深的梦吧，当然随便写点什么也不错...</p>
+          </header>
+          <form id="dreamForm" class="panel journal-card" autocomplete="off">
+            <div class="note-count" id="charCount">0</div>
+            <textarea id="dreamText" class="text-field dream-input" placeholder="写下梦里残留的一句话、一个地点或一段声音。"></textarea>
+
+            <div class="journal-actions">
+              <div class="action-left">
+                <div class="emotion-picker">
+                  <button id="emotionTrigger" class="emotion-orb" type="button" aria-label="选择标签" aria-expanded="false">
+                    <i id="emotionIcon" class="fa-regular fa-face-smile"></i>
+                  </button>
+                  <div id="emotionMenu" class="emotion-menu" role="menu" aria-label="标签菜单">
+                    <div class="emotion-menu-head">选择标签</div>
+                    <div id="emotionList" class="emotion-list"></div>
+                    <div class="custom-tag-row">
+                      <input id="customEmotionInput" class="custom-tag-input" type="text" maxlength="8" placeholder="自定义" />
+                      <button id="addEmotionButton" class="custom-tag-button" type="button" aria-label="添加自定义标签">
+                        <i class="fa-solid fa-plus"></i>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <label class="switch">
+                  <span>匿名公开</span>
+                  <input id="publicSwitch" class="sr-only" type="checkbox" />
+                  <span class="switch-track" aria-hidden="true"><span class="switch-dot"></span></span>
+                </label>
+              </div>
+            </div>
+          </form>
+
+          <div class="publish-bar">
+            <button class="publish-button" type="submit" form="dreamForm">
+              <i class="fa-solid fa-paper-plane"></i>
+              <span>保存并发布</span>
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <section id="searchView" class="view" data-view="search">
+        <div class="search-layout">
+          <form id="searchForm" class="panel search-card" autocomplete="off">
+            <span class="section-label"><i class="fa-solid fa-wave-square"></i> Recall</span>
+            <h2 class="section-title">回想一下...</h2>
+            <p class="section-subtitle">回忆你的梦并匹配最相似的梦，看看有没有人跟你梦到一样的东西吧！</p>
+
+            <div class="mt-7">
+              <label class="field-head" for="searchText">
+                <span>现实场景</span>
+                <span id="resultBrief">待检索</span>
+              </label>
+              <textarea id="searchText" class="text-field scene-input" placeholder="雨后的巷子，红色售货机，熟悉的门。"></textarea>
+              <div class="quick-row">
+                <button class="quick-chip" type="button" data-query="雨后的街道，红色自动售货机，一只会发光的猫从霓虹灯下面经过。">雨夜</button>
+                <button class="quick-chip" type="button" data-query="地铁站没有尽头，广播念着我的名字，墙上全是小时候的照片。">地铁</button>
+                <button class="quick-chip" type="button" data-query="办公室漂浮在太空里，电脑屏幕像星图一样展开。">太空</button>
+              </div>
+            </div>
+
+            <button id="runSearch" class="primary-button mt-6 w-full" type="submit">
+              <i class="fa-solid fa-magnifying-glass"></i>检索
+            </button>
+          </form>
+
+          <div id="searchResults" class="result-stack"></div>
+        </div>
+      </section>
+
+      <section id="squareView" class="view square-view" data-view="square">
+        <div class="w-full">
+          <div class="square-head">
+            <div>
+              <span class="section-label"><i class="fa-solid fa-layer-group"></i> Public</span>
+              <h2 class="section-title">梦境大厅</h2>
+            </div>
+            <div class="square-controls">
+              <div id="squareModes" class="mode-row" aria-label="大厅内容">
+                <button class="filter-chip active" type="button" data-square-mode="public">公开</button>
+                <button class="filter-chip" type="button" data-square-mode="history">历史</button>
+              </div>
+              <div id="squareFilters" class="filter-row">
+                <button class="filter-chip active" type="button" data-filter="全部">全部</button>
+                <button class="filter-chip" type="button" data-filter="喜悦">喜悦</button>
+                <button class="filter-chip" type="button" data-filter="焦虑">焦虑</button>
+                <button class="filter-chip" type="button" data-filter="诡异">诡异</button>
+                <button class="filter-chip" type="button" data-filter="科幻">科幻</button>
+              </div>
+            </div>
+          </div>
+          <div id="squareList" class="square-grid"></div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">dejavu 2026</footer>
+  </div>
+
+  <button id="accountButton" class="account-bubble" type="button" aria-label="登录状态">
+    <i class="fa-regular fa-user"></i>
+    <span id="accountLabel">登录</span>
+  </button>
+
+  <div id="authModal" class="auth-modal" aria-hidden="true">
+    <article class="auth-card">
+      <button id="authClose" class="auth-close icon-button" type="button" aria-label="关闭登录窗口">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+
+      <div id="authSetupPanel" class="auth-panel hidden">
+        <span class="section-label"><i class="fa-solid fa-plug-circle-bolt"></i> Setup</span>
+        <h2 class="auth-title">连接 Supabase</h2>
+        <p class="auth-copy">部署前需要填入 Project URL 和 anon public key。service_role key 不能放在前端。</p>
+        <code class="setup-code">frontend/config.js</code>
+      </div>
+
+      <div id="authLoginPanel" class="auth-panel">
+        <span class="section-label"><i class="fa-regular fa-envelope"></i> Account</span>
+        <h2 class="auth-title">进入梦境</h2>
+        <p class="auth-copy">输入邮箱，收到邮件后把验证码填回来。</p>
+        <form id="authForm" class="auth-form" autocomplete="on">
+          <input id="authEmail" class="auth-input" type="email" placeholder="you@example.com" required />
+          <input id="authOtp" class="auth-input hidden" type="text" inputmode="numeric" maxlength="6" placeholder="6 位验证码" />
+          <button id="authSubmit" class="primary-button w-full" type="submit">
+            <i class="fa-solid fa-paper-plane"></i>
+            <span id="authSubmitLabel">发送验证码</span>
+          </button>
+          <button id="authBackButton" class="ghost-button w-full hidden" type="button">
+            <i class="fa-solid fa-arrow-left"></i>
+            换一个邮箱
+          </button>
+        </form>
+        <p id="authMessage" class="auth-message"></p>
+      </div>
+
+      <div id="authSignedInPanel" class="auth-panel hidden">
+        <span class="section-label"><i class="fa-regular fa-circle-check"></i> Signed in</span>
+        <h2 class="auth-title">已经登录</h2>
+        <p id="authUser" class="auth-copy"></p>
+        <button id="signOutButton" class="ghost-button w-full" type="button">
+          <i class="fa-solid fa-arrow-right-from-bracket"></i>
+          退出登录
+        </button>
+      </div>
+    </article>
+  </div>
+
+  <div id="detailModal" class="modal" aria-hidden="true">
+    <article class="modal-card">
+      <div class="mb-4 flex items-start justify-between gap-4">
+        <div id="modalMeta" class="meta-row"></div>
+        <button id="closeModal" class="icon-button" type="button" aria-label="关闭详情">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+      <p id="modalText" class="text-base leading-8 text-stone-800"></p>
+      <div id="modalFoot" class="mt-5 text-xs text-stone-500"></div>
+    </article>
+  </div>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <template id="dreamCardTemplate">
+    <article class="dream-card" tabindex="0">
+      <div class="meta-row">
+        <span class="emotion-badge"></span>
+        <span class="dream-date text-xs text-stone-500"></span>
+      </div>
+      <p class="card-text dream-text"></p>
+      <div class="relative mt-5 flex items-center justify-between gap-3 text-xs text-stone-500">
+        <span class="dream-author"></span>
+        <span class="dream-visibility"></span>
+      </div>
+    </article>
+  </template>
+
+  <script type="module" src="./app.js"></script>
+</body>
+</html>
