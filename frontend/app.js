@@ -327,10 +327,8 @@ async function sendEmailOtp(email) {
 
   if (error) {
     state.nextOtpSendAt = Date.now() + 60_000;
-    const message = /rate limit/i.test(error.message || '')
-      ? '验证码发送太频繁。先等一会儿；如果一直出现，需要在 Supabase 配置自定义 SMTP。'
-      : (error.message || '验证码发送失败。');
-    setAuthMessage(message, true);
+    console.warn('Supabase OTP send failed:', error);
+    setAuthMessage(formatAuthError(error, 'send'), true);
     return;
   }
 
@@ -366,7 +364,8 @@ async function verifyEmailOtp(email) {
   dom.authSubmit.disabled = false;
 
   if (error) {
-    setAuthMessage(error.message || '验证码不正确或已过期。', true);
+    console.warn('Supabase OTP verify failed:', error);
+    setAuthMessage(formatAuthError(error, 'verify'), true);
     return;
   }
 
@@ -400,6 +399,54 @@ async function signOut() {
   resetAuthForm();
   closeAuthModal();
   showToast('已退出');
+}
+
+function formatAuthError(error, action) {
+  const rawMessage = getErrorMessage(error);
+  const normalized = rawMessage.toLowerCase();
+
+  if (/rate limit|over_email_send_rate_limit|too many|email rate/i.test(rawMessage)) {
+    return '验证码发送太频繁。先等一会儿；如果一直出现，需要在 Supabase 配置自定义 SMTP。';
+  }
+
+  if (action === 'send' && /smtp|mail|email|send|provider|relay|resend|535|550|554/i.test(rawMessage)) {
+    return '验证码邮件发送失败。请检查 Supabase SMTP 配置、Resend API Key 和 bluer.site 的 DNS 验证状态。';
+  }
+
+  if (action === 'verify' && /expired|invalid|token|otp/i.test(rawMessage)) {
+    return '验证码不正确或已过期，请重新发送。';
+  }
+
+  if (rawMessage && rawMessage !== '{}' && normalized !== '[object object]' && !normalized.includes('undefined')) {
+    return rawMessage;
+  }
+
+  return action === 'send'
+    ? '验证码发送失败。常见原因是 SMTP 还没配置好、Resend 域名仍在 Pending，或 Supabase 邮件限流尚未恢复。'
+    : '验证码验证失败，请确认邮箱和 6 位验证码是否正确。';
+}
+
+function getErrorMessage(error) {
+  if (!error) return '';
+  if (typeof error === 'string') return error.trim();
+
+  const candidates = [
+    error.message,
+    error.error_description,
+    error.error,
+    error.name,
+    error.code,
+    error.status ? `HTTP ${error.status}` : ''
+  ];
+
+  const directMessage = candidates.find((item) => typeof item === 'string' && item.trim());
+  if (directMessage) return directMessage.trim();
+
+  try {
+    return JSON.stringify(error);
+  } catch (_jsonError) {
+    return '';
+  }
 }
 
 function setAuthMessage(message, isError = false) {
