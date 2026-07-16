@@ -331,7 +331,7 @@ async function sendEmailOtp(email) {
   dom.authOtp.focus();
   dom.authSubmitLabel.textContent = '验证并登录';
   dom.authBackButton.classList.remove('hidden');
-  setAuthMessage('验证码已经发到邮箱。复制 6 位数字填在这里。');
+  setAuthMessage('验证码已经发到邮箱。复制 6 位数字填在这里。若邮件只有链接，请把 Supabase 邮件模板改成 Token。');
 }
 
 async function verifyEmailOtp(email) {
@@ -372,7 +372,7 @@ function resetAuthForm() {
   dom.authOtp.required = false;
   dom.authOtp.classList.add('hidden');
   dom.authSubmit.disabled = false;
-  dom.authSubmitLabel.textContent = '发送验证码';
+  dom.authSubmitLabel.textContent = '发送邮箱验证码';
   dom.authBackButton.classList.add('hidden');
   setAuthMessage('');
 }

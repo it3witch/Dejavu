@@ -72,8 +72,46 @@ DEJAVU_SUPABASE_ANON_KEY=你的 anon public key
 3. 查看邮件里的 6 位验证码。
 4. 回到网站输入验证码后即可记录梦境。
 
+如果邮件里仍然是登录链接，而不是 6 位验证码，进入 Supabase：
+
+```text
+Authentication -> Email Templates -> Magic Link
+```
+
+把模板里的链接变量改成验证码变量，例如：
+
+```html
+<h2>你的 Deja vu 验证码</h2>
+<p>{{ .Token }}</p>
+```
+
+不要只保留 `{{ .ConfirmationURL }}`，否则 Supabase 会继续发送魔法链接。
+
 登录后：
 
 - 私密梦境只有自己可见。
 - 勾选“匿名公开”的梦境会进入大厅。
 - 检索会匹配公开梦境和自己的梦境。
+
+## 手机访问
+
+手机不能访问电脑上的 `http://127.0.0.1:5173`。`127.0.0.1` 在手机上代表手机自己，不是电脑。
+
+部署后请用 Vercel 域名访问，例如：
+
+```text
+https://你的项目.vercel.app
+```
+
+如果只想在同一个 Wi-Fi 下本地预览，需要把前端服务绑定到局域网地址：
+
+```powershell
+cd D:\Project_dejavu
+.\.venv\Scripts\python.exe -m http.server 5173 --bind 0.0.0.0 --directory frontend
+```
+
+然后在电脑上运行 `ipconfig` 找到 IPv4 地址，手机访问：
+
+```text
+http://电脑IPv4地址:5173
+```
