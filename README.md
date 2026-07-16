@@ -87,6 +87,12 @@ Authentication -> Email Templates -> Magic Link
 
 不要只保留 `{{ .ConfirmationURL }}`，否则 Supabase 会继续发送魔法链接。
 
+### 邮件限流
+
+如果出现 `email rate limit exceeded`，说明 Supabase Auth 的邮件发送被限流了。先停止重复点击，等几分钟到一小时后再试。
+
+当前前端已经加了 60 秒发送冷却，避免连续请求继续触发限流。正式部署给别人使用前，建议在 Supabase 配置自定义 SMTP，否则默认邮件服务只适合测试。
+
 登录后：
 
 - 私密梦境只有自己可见。

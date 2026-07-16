@@ -79,6 +79,7 @@ const state = {
   session: null,
   user: null,
   pendingAuthEmail: '',
+  nextOtpSendAt: 0,
   isLoadingDreams: false
 };
 
@@ -306,6 +307,12 @@ async function handleAuthSubmit(event) {
 }
 
 async function sendEmailOtp(email) {
+  const waitSeconds = Math.ceil((state.nextOtpSendAt - Date.now()) / 1000);
+  if (waitSeconds > 0) {
+    setAuthMessage(`发送太频繁了，${waitSeconds} 秒后再试。`, true);
+    return;
+  }
+
   dom.authSubmit.disabled = true;
   setAuthMessage('正在发送验证码...');
 
@@ -319,10 +326,15 @@ async function sendEmailOtp(email) {
   dom.authSubmit.disabled = false;
 
   if (error) {
-    setAuthMessage(error.message || '验证码发送失败。', true);
+    state.nextOtpSendAt = Date.now() + 60_000;
+    const message = /rate limit/i.test(error.message || '')
+      ? '验证码发送太频繁。先等一会儿；如果一直出现，需要在 Supabase 配置自定义 SMTP。'
+      : (error.message || '验证码发送失败。');
+    setAuthMessage(message, true);
     return;
   }
 
+  state.nextOtpSendAt = Date.now() + 60_000;
   state.pendingAuthEmail = email;
   dom.authEmail.disabled = true;
   dom.authOtp.classList.remove('hidden');
