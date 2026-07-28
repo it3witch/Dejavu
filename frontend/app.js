@@ -139,7 +139,23 @@ const dom = {
   signOutButton: document.querySelector('#signOutButton')
 };
 
+syncViewportHeight();
 init();
+
+function syncViewportHeight() {
+  const viewport = window.visualViewport;
+
+  const updateHeight = () => {
+    const height = viewport?.height || window.innerHeight;
+    document.documentElement.style.setProperty('--viewport-height', `${Math.round(height)}px`);
+  };
+
+  updateHeight();
+  window.addEventListener('resize', updateHeight, { passive: true });
+  window.addEventListener('orientationchange', updateHeight, { passive: true });
+  viewport?.addEventListener('resize', updateHeight, { passive: true });
+  viewport?.addEventListener('scroll', updateHeight, { passive: true });
+}
 
 async function init() {
   bindEvents();
@@ -908,7 +924,7 @@ function startLofiBackground() {
   function resize() {
     dpr = Math.min(window.devicePixelRatio || 1, 2);
     width = window.innerWidth;
-    height = window.innerHeight;
+    height = window.visualViewport?.height || window.innerHeight;
     canvas.width = Math.floor(width * dpr);
     canvas.height = Math.floor(height * dpr);
     canvas.style.width = `${width}px`;

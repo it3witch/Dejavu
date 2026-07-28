@@ -12,6 +12,13 @@
       --walnut: #d7cbb8;
       --clay: #9b8f7f;
       --font-main: "Helvetica Neue Bold", "Helvetica Neue", Helvetica, Arial, sans-serif;
+      --viewport-height: 100vh;
+    }
+
+    @supports (height: 100dvh) {
+      :root {
+        --viewport-height: 100dvh;
+      }
     }
 
     * {
@@ -20,6 +27,7 @@
 
     body {
       min-height: 100vh;
+      min-height: var(--viewport-height);
       margin: 0;
       overflow-x: hidden;
       background:
@@ -63,6 +71,7 @@
       z-index: -3;
       width: 100vw;
       height: 100vh;
+      height: var(--viewport-height);
       opacity: 0.78;
       pointer-events: none;
       filter: blur(0.25px);
@@ -83,11 +92,13 @@
       display: flex;
       flex-direction: column;
       min-height: 100vh;
-      padding: 22px;
+      min-height: var(--viewport-height);
+      padding: clamp(16px, 2vmin, 22px);
     }
 
     main {
-      flex: 1 0 auto;
+      flex: 1 1 auto;
+      min-height: 0;
     }
 
     .topbar {
@@ -97,22 +108,23 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      gap: 16px;
-      width: min(100%, 520px);
-      max-width: 520px;
+      width: min(100%, 448px);
+      max-width: 448px;
       margin: 0 auto;
-      border: 1px solid rgba(255, 255, 255, 0.48);
-      background: rgba(255, 255, 255, 0.34);
-      backdrop-filter: blur(22px);
-      border-radius: 12px;
-      padding: 10px;
-      box-shadow: 0 22px 70px rgba(78, 67, 50, 0.14), inset 0 1px 0 rgba(255,255,255,0.72);
-      overflow: hidden;
-      transition: transform 220ms ease, box-shadow 220ms ease, background 220ms ease;
+      border: 0;
+      background: transparent;
+      -webkit-backdrop-filter: none;
+      backdrop-filter: none;
+      border-radius: 999px;
+      padding: 0;
+      box-shadow: none;
+      overflow: visible;
+      transition: transform 220ms ease;
     }
 
     .topbar::before {
       content: "";
+      display: none;
       position: absolute;
       inset: -60% -12%;
       background:
@@ -126,8 +138,8 @@
 
     .topbar:hover {
       transform: translateY(-1px);
-      background: rgba(255, 255, 255, 0.42);
-      box-shadow: 0 24px 76px rgba(78, 67, 50, 0.17), inset 0 1px 0 rgba(255,255,255,0.8);
+      background: transparent;
+      box-shadow: none;
     }
 
     .topbar:hover::before {
@@ -171,25 +183,26 @@
       z-index: 1;
       display: grid;
       width: 100%;
-      grid-template-columns: repeat(3, minmax(82px, 1fr));
-      gap: 4px;
-      border: 1px solid rgba(255, 255, 255, 0.42);
-      background: rgba(255, 255, 255, 0.26);
+      grid-template-columns: repeat(3, minmax(86px, 1fr));
+      gap: 0;
+      border: 1px solid rgba(255, 255, 255, 0.56);
+      background: rgba(255, 255, 255, 0.34);
       border-radius: 999px;
-      padding: 4px;
-      backdrop-filter: blur(18px) saturate(1.15);
-      box-shadow: inset 0 1px 0 rgba(255,255,255,0.64), 0 10px 28px rgba(82, 69, 52, 0.08);
+      padding: 5px;
+      -webkit-backdrop-filter: blur(22px) saturate(1.16);
+      backdrop-filter: blur(22px) saturate(1.16);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.74), 0 14px 38px rgba(82, 69, 52, 0.12);
     }
 
     .nav-indicator {
       position: absolute;
-      top: 4px;
-      bottom: 4px;
-      left: 4px;
-      width: calc((100% - 8px) / 3);
+      top: 5px;
+      bottom: 5px;
+      left: 5px;
+      width: calc((100% - 10px) / 3);
       border-radius: 999px;
-      background: rgba(255, 255, 255, 0.58);
-      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.82), 0 8px 22px rgba(77, 67, 54, 0.1);
+      background: rgba(255, 255, 255, 0.64);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.88), 0 10px 24px rgba(77, 67, 54, 0.12);
       transition: transform 320ms cubic-bezier(.22,.8,.22,1);
     }
 
@@ -208,7 +221,7 @@
       align-items: center;
       justify-content: center;
       gap: 7px;
-      min-height: 36px;
+      min-height: 38px;
       border: 0;
       background: transparent;
       color: rgba(41, 38, 32, 0.52);
@@ -326,10 +339,11 @@
 
     .view {
       display: none;
-      min-height: calc(100vh - 150px);
+      min-height: calc(100vh - 122px);
+      min-height: calc(var(--viewport-height) - 122px);
       max-width: 1060px;
       margin: 0 auto;
-      padding: 46px 0 26px;
+      padding: 36px 0 22px;
       animation: viewIn 420ms cubic-bezier(.22,.8,.22,1) both;
     }
 
@@ -344,7 +358,7 @@
 
     #journalView.view.active {
       align-items: start;
-      padding-top: clamp(76px, 10vh, 96px);
+      padding-top: clamp(42px, 7vh, 70px);
     }
 
     @keyframes viewIn {
@@ -1207,6 +1221,7 @@
       z-index: 80;
       width: min(410px, calc(100vw - 20px));
       height: 100vh;
+      height: var(--viewport-height);
       border-left: 1px solid var(--line);
       background: rgba(255, 252, 245, 0.72);
       backdrop-filter: blur(28px);
@@ -1232,6 +1247,7 @@
       display: grid;
       gap: 10px;
       max-height: calc(100vh - 88px);
+      max-height: calc(var(--viewport-height) - 88px);
       overflow: auto;
       padding-right: 3px;
     }
@@ -1445,7 +1461,7 @@
 
     @media (max-width: 900px) {
       .topbar {
-        width: min(100%, 520px);
+        width: min(100%, 420px);
       }
 
       .search-layout {
@@ -1460,11 +1476,39 @@
 
     @media (max-width: 640px) {
       .app {
-        padding: 14px;
+        padding: 12px;
+        padding-top: max(10px, env(safe-area-inset-top));
+        padding-bottom: max(10px, env(safe-area-inset-bottom));
       }
 
       .topbar {
-        top: 10px;
+        position: fixed;
+        top: max(8px, env(safe-area-inset-top));
+        left: 50%;
+        width: min(70vw, 272px);
+        margin: 0;
+        transform: translateX(-50%);
+      }
+
+      .topbar:hover {
+        transform: translateX(-50%) translateY(-1px);
+      }
+
+      .nav {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        padding: 4px;
+      }
+
+      .nav-indicator {
+        top: 4px;
+        bottom: 4px;
+        left: 4px;
+        width: calc((100% - 8px) / 3);
+      }
+
+      .nav-button {
+        min-height: 34px;
+        font-size: 14px;
       }
 
       .nav-button span,
@@ -1472,28 +1516,84 @@
         display: none;
       }
 
+      .view {
+        min-height: 0;
+        width: 100%;
+        padding: clamp(56px, 9vh, 66px) 0 10px;
+        padding: clamp(56px, 9dvh, 66px) 0 10px;
+      }
+
+      .view.active {
+        align-items: start;
+      }
+
       .journal-card,
       .search-card {
-        padding: 16px;
+        padding: 14px;
       }
 
       #journalView.view.active {
-        padding-top: 78px;
+        padding-top: clamp(56px, 9vh, 66px);
+        padding-top: clamp(56px, 9dvh, 66px);
+      }
+
+      .journal-wrap {
+        gap: clamp(8px, 1.8vh, 12px);
+        gap: clamp(8px, 1.8dvh, 12px);
+      }
+
+      .journal-heading {
+        gap: 4px;
+        margin-bottom: 0;
       }
 
       .quiet-title {
         margin: 0;
-        font-size: 42px;
+        font-size: clamp(30px, 8.8vw, 38px);
+        line-height: 1.08;
       }
 
       .journal-subtitle {
-        max-width: 330px;
+        display: -webkit-box;
+        max-width: none;
         padding: 0;
-        font-size: 12px;
+        overflow: hidden;
+        font-size: 11.5px;
+        line-height: 1.45;
+        -webkit-box-orient: vertical;
+        -webkit-line-clamp: 2;
+      }
+
+      .journal-card::before {
+        top: -10px;
+        width: 108px;
+        height: 20px;
+      }
+
+      .journal-card::after {
+        bottom: -7px;
+        height: 10px;
+        background-size: 14px 10px, 14px 10px;
+      }
+
+      .dream-input {
+        min-height: clamp(170px, 40vh, 260px);
+        min-height: clamp(170px, 40dvh, 260px);
+        padding: 20px 15px 14px;
+        font-size: 15px;
+        line-height: 28px;
+        background-size: 100% 28px, auto;
+        background-position: 0 16px, 0 0;
+      }
+
+      .dream-input:focus {
+        background-size: 100% 28px, auto;
+        background-position: 0 16px, 0 0;
       }
 
       .journal-actions {
         align-items: center;
+        margin-top: 10px;
       }
 
       .action-left {
@@ -1511,10 +1611,37 @@
       .switch {
         width: auto;
         flex: 0 0 auto;
+        min-height: 38px;
+        padding: 0 10px;
+        font-size: 12px;
+      }
+
+      .switch-track {
+        width: 34px;
+        height: 20px;
+      }
+
+      .switch-dot {
+        top: 2px;
+        left: 2px;
+      }
+
+      #publicSwitch:checked + .switch-track .switch-dot {
+        transform: translateX(14px);
+      }
+
+      .emotion-orb {
+        width: 40px;
+        height: 40px;
       }
 
       .publish-bar {
         padding: 0;
+      }
+
+      .publish-button {
+        min-height: 46px;
+        border-radius: 999px;
       }
 
       .emotion-menu {
@@ -1553,12 +1680,74 @@
 
       .account-bubble {
         right: 14px;
-        bottom: 14px;
+        bottom: max(12px, env(safe-area-inset-bottom));
         min-height: 40px;
         padding: 0 12px;
       }
 
+      .site-footer {
+        display: none;
+      }
+
       .auth-card {
         padding: 18px;
+      }
+    }
+
+    @media (max-width: 640px) and (max-height: 700px) {
+      .app {
+        padding-left: 10px;
+        padding-right: 10px;
+      }
+
+      .topbar {
+        width: min(68vw, 260px);
+      }
+
+      .nav-button {
+        min-height: 32px;
+      }
+
+      #journalView.view.active {
+        padding-top: 50px;
+      }
+
+      .journal-wrap {
+        gap: 7px;
+      }
+
+      .quiet-title {
+        font-size: clamp(27px, 8vw, 32px);
+      }
+
+      .journal-subtitle {
+        -webkit-line-clamp: 1;
+      }
+
+      .journal-card,
+      .search-card {
+        padding: 12px;
+      }
+
+      .dream-input {
+        min-height: clamp(148px, 35vh, 210px);
+        min-height: clamp(148px, 35dvh, 210px);
+        padding: 18px 14px 12px;
+        line-height: 26px;
+        background-size: 100% 26px, auto;
+        background-position: 0 15px, 0 0;
+      }
+
+      .dream-input:focus {
+        background-size: 100% 26px, auto;
+        background-position: 0 15px, 0 0;
+      }
+
+      .journal-actions {
+        margin-top: 8px;
+      }
+
+      .publish-button {
+        min-height: 44px;
       }
     }
