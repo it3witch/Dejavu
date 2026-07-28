@@ -1153,14 +1153,134 @@
     }
 
     .dream-card {
-      min-height: 204px;
+      display: flex;
+      flex-direction: column;
+      min-height: 236px;
       padding: 15px;
       cursor: pointer;
     }
 
     .dream-card .card-text {
-      margin-top: 17px;
-      -webkit-line-clamp: 5;
+      flex: 1 1 auto;
+      margin-top: 22px;
+      color: rgba(41, 38, 32, 0.82);
+      font-size: 16px;
+      line-height: 1.8;
+      -webkit-line-clamp: 4;
+    }
+
+    .dream-card-head,
+    .dream-card-foot {
+      position: relative;
+      z-index: 1;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .dream-card-head {
+      align-items: flex-start;
+    }
+
+    .dream-author-block {
+      display: inline-flex;
+      align-items: center;
+      min-width: 0;
+      gap: 8px;
+    }
+
+    .dream-avatar {
+      display: inline-grid;
+      flex: 0 0 auto;
+      place-items: center;
+      width: 36px;
+      height: 36px;
+      border: 1px solid rgba(255, 255, 255, 0.62);
+      border-radius: 999px;
+      background:
+        radial-gradient(circle at 28% 22%, rgba(255, 255, 255, 0.74), transparent 34%),
+        hsl(var(--avatar-hue, 214) 54% 72%);
+      color: rgba(41, 38, 32, 0.72);
+      font-size: 14px;
+      font-weight: 700;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.72), 0 10px 22px rgba(82, 69, 52, 0.1);
+    }
+
+    .dream-author-copy {
+      display: grid;
+      min-width: 0;
+      gap: 2px;
+    }
+
+    .dream-author {
+      overflow: hidden;
+      color: var(--paper);
+      font-size: 14px;
+      line-height: 1.15;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .dream-handle {
+      overflow: hidden;
+      color: var(--quiet);
+      font-size: 11px;
+      line-height: 1.2;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .dream-card-head .emotion-badge {
+      flex: 0 0 auto;
+      margin-top: 1px;
+    }
+
+    .dream-card-foot {
+      flex-wrap: wrap;
+      margin-top: 18px;
+      color: rgba(41, 38, 32, 0.48);
+      font-size: 11px;
+    }
+
+    .dream-time,
+    .dream-social,
+    .dream-social span {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .dream-time {
+      min-width: 0;
+    }
+
+    .dream-time .dream-date {
+      overflow: hidden;
+      font-size: 11px;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .date-latin {
+      font-family: Arial, Helvetica, sans-serif;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .date-weekday {
+      font-family: var(--font-main);
+    }
+
+    .dream-time i,
+    .dream-social i {
+      font-size: 14px;
+    }
+
+    .dream-social {
+      margin-left: auto;
+      flex: 0 0 auto;
+      gap: 12px;
+      color: rgba(41, 38, 32, 0.36);
     }
 
     .modal {

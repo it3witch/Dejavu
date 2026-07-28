@@ -7,7 +7,7 @@ const MOCK_DREAMS = [
     emotion: '诡异',
     isPublic: true,
     author: '匿名 07',
-    createdAt: '2026-07-07',
+    createdAt: '2026-07-07T04:19:00+08:00',
     userId: null
   },
   {
@@ -16,7 +16,7 @@ const MOCK_DREAMS = [
     emotion: '科幻',
     isPublic: true,
     author: '匿名 19',
-    createdAt: '2026-07-08',
+    createdAt: '2026-07-08T09:34:00+08:00',
     userId: null
   },
   {
@@ -25,7 +25,7 @@ const MOCK_DREAMS = [
     emotion: '喜悦',
     isPublic: true,
     author: '匿名 33',
-    createdAt: '2026-07-09',
+    createdAt: '2026-07-09T23:07:00+08:00',
     userId: null
   },
   {
@@ -34,7 +34,7 @@ const MOCK_DREAMS = [
     emotion: '焦虑',
     isPublic: false,
     author: '我',
-    createdAt: '2026-07-10',
+    createdAt: '2026-07-10T01:57:00+08:00',
     userId: 'mock-user'
   },
   {
@@ -43,7 +43,7 @@ const MOCK_DREAMS = [
     emotion: '诡异',
     isPublic: true,
     author: '匿名 51',
-    createdAt: '2026-07-11',
+    createdAt: '2026-07-11T03:19:00+08:00',
     userId: null
   }
 ];
@@ -106,7 +106,8 @@ const state = {
   user: null,
   pendingAuthEmail: '',
   nextOtpSendAt: 0,
-  isLoadingDreams: false
+  isLoadingDreams: false,
+  profile: null
 };
 
 const emotionMeta = {
@@ -258,10 +259,12 @@ async function init() {
   }
 
   setSession(data?.session || null);
+  await ensureCurrentProfile();
   await loadDreamsFromSupabase();
 
   supabase.auth.onAuthStateChange(async (_event, session) => {
     setSession(session);
+    await ensureCurrentProfile();
     await loadDreamsFromSupabase();
   });
 }
@@ -541,6 +544,7 @@ function restoreCurrentViewState() {
 function setSession(session) {
   state.session = session;
   state.user = session?.user || null;
+  state.profile = null;
   renderAuthState();
 }
 
@@ -548,7 +552,7 @@ function renderAuthState() {
   const signedIn = Boolean(state.user);
 
   if (dom.accountLabel) {
-    dom.accountLabel.textContent = signedIn ? getEmailName(state.user.email) : (HAS_SUPABASE_CONFIG ? '登录' : '配置');
+    dom.accountLabel.textContent = signedIn ? formatPublicHandle(getCurrentPublicHandle()) : (HAS_SUPABASE_CONFIG ? '登录' : '配置');
   }
   dom.accountButton?.querySelector('i')?.setAttribute('class', signedIn ? 'fa-regular fa-circle-check' : 'fa-regular fa-user');
 
@@ -557,8 +561,47 @@ function renderAuthState() {
   dom.authSignedInPanel?.classList.toggle('hidden', !HAS_SUPABASE_CONFIG || !signedIn);
 
   if (signedIn && dom.authUser) {
-    dom.authUser.textContent = state.user.email || '已登录';
+    dom.authUser.textContent = formatPublicHandle(getCurrentPublicHandle());
   }
+}
+
+async function ensureCurrentProfile() {
+  if (!supabase || !state.user) {
+    state.profile = null;
+    renderAuthState();
+    return null;
+  }
+
+  const fallbackHandle = generatePublicHandle(state.user.id || state.user.email);
+  const profileRow = {
+    user_id: state.user.id,
+    email: state.user.email || '',
+    public_handle: fallbackHandle,
+    updated_at: new Date().toISOString()
+  };
+
+  const { data, error } = await supabase
+    .from('profiles')
+    .upsert(profileRow, { onConflict: 'user_id' })
+    .select('user_id,email,public_handle')
+    .single();
+
+  if (error) {
+    console.warn('Profile sync failed:', error);
+    state.profile = {
+      userId: state.user.id,
+      publicHandle: fallbackHandle
+    };
+    renderAuthState();
+    return state.profile;
+  }
+
+  state.profile = {
+    userId: data.user_id,
+    publicHandle: data.public_handle || fallbackHandle
+  };
+  renderAuthState();
+  return state.profile;
 }
 
 async function handleAuthSubmit(event) {
@@ -644,6 +687,7 @@ async function verifyEmailOtp(email) {
   }
 
   setSession(data?.session || null);
+  await ensureCurrentProfile();
   resetAuthForm();
   closeAuthModal();
   showToast('已登录');
@@ -915,11 +959,15 @@ async function loadDreamsFromSupabase() {
 }
 
 async function saveDreamToSupabase(dream) {
+  if (!state.profile) {
+    await ensureCurrentProfile();
+  }
+
   const row = {
     text: dream.text,
     emotion: dream.emotion,
     is_public: dream.isPublic,
-    author: state.user.email || '我',
+    author: getCurrentPublicHandle(),
     user_id: state.user.id
   };
 
@@ -942,8 +990,8 @@ function rowToDream(row) {
     text: row.text,
     emotion: row.emotion || '喜悦',
     isPublic: Boolean(row.is_public),
-    author: row.author || '匿名',
-    createdAt: String(row.created_at || '').slice(0, 10) || new Date().toISOString().slice(0, 10),
+    author: normalizeDreamAuthor(row.author, row.user_id || row.id || row.created_at),
+    createdAt: String(row.created_at || '') || new Date().toISOString(),
     userId: row.user_id || null
   };
 }
@@ -1001,15 +1049,17 @@ function renderSquare() {
 function createDreamCard(dream, options = {}) {
   const node = dom.template.content.firstElementChild.cloneNode(true);
   const meta = getEmotionMeta(dream.emotion);
+  const profile = getDreamProfile(dream, options.mode);
   const badge = node.querySelector('.emotion-badge');
+  const avatar = node.querySelector('.dream-avatar');
 
   badge.innerHTML = `<i class="${meta.icon}"></i>${escapeHtml(dream.emotion)}`;
-  node.querySelector('.dream-date').textContent = formatDate(dream.createdAt);
+  avatar.textContent = profile.avatar;
+  avatar.style.setProperty('--avatar-hue', profile.hue);
+  node.querySelector('.dream-author').textContent = profile.name;
+  node.querySelector('.dream-handle').textContent = profile.handle;
+  node.querySelector('.dream-date').innerHTML = formatDreamTimestampHtml(dream.createdAt);
   node.querySelector('.dream-text').textContent = dream.text;
-  node.querySelector('.dream-author').textContent = displayAuthor(dream, options.mode);
-  node.querySelector('.dream-visibility').innerHTML = dream.isPublic
-    ? '<i class="fa-solid fa-eye"></i>'
-    : '<i class="fa-solid fa-lock"></i>';
 
   if (options.mode === 'history') {
     node.style.minHeight = 'auto';
@@ -1164,8 +1214,70 @@ function displayAuthor(dream, mode = 'square') {
   return dream.author || '匿名';
 }
 
-function getEmailName(email = '') {
-  return email.split('@')[0] || '我';
+function getDreamProfile(dream, mode = 'square') {
+  const isMine = state.user && dream.userId === state.user.id;
+  const authorName = isMine
+    ? '我'
+    : (mode === 'square' || dream.isPublic ? 'Unknown number' : displayAuthor(dream, mode));
+  const handleBase = isMine
+    ? getCurrentPublicHandle()
+    : getSafeAuthorHandle(dream);
+  const handle = formatPublicHandle(handleBase);
+
+  return {
+    name: authorName,
+    handle,
+    avatar: isMine ? '我' : getDreamInitial(authorName),
+    hue: String(getHashNumber(`${dream.id}${dream.createdAt}`) % 360)
+  };
+}
+
+function getDreamInitial(name) {
+  const text = String(name || 'U').trim();
+  return /[a-z0-9]/i.test(text[0]) ? text[0].toUpperCase() : text[0];
+}
+
+function isAnonymousAuthor(author) {
+  return !author || String(author).trim().startsWith('匿名');
+}
+
+function normalizeDreamAuthor(author, fallbackSeed) {
+  const value = String(author || '').trim();
+  if (!value) return '匿名';
+  return isEmailLike(value) ? generatePublicHandle(fallbackSeed || value) : value;
+}
+
+function isEmailLike(value) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value || '').trim());
+}
+
+function getCurrentPublicHandle() {
+  return state.profile?.publicHandle || generatePublicHandle(state.user?.id || state.user?.email || 'guest');
+}
+
+function getSafeAuthorHandle(dream) {
+  const author = String(dream.author || '').trim();
+  if (author && !isAnonymousAuthor(author) && !isEmailLike(author)) {
+    return author;
+  }
+  return generatePublicHandle(dream.userId || dream.id || dream.createdAt || dream.text);
+}
+
+function formatPublicHandle(handle) {
+  return `@${String(handle || 'unique00').replace(/^@/, '').replace(/\s+/g, '').slice(0, 18) || 'unique00'}`;
+}
+
+function generatePublicHandle(seed) {
+  return `unique${String((getHashNumber(seed) % 900000) + 100000).padStart(6, '0')}`;
+}
+
+function getDreamNumber(dream) {
+  const source = String(dream.id || dream.createdAt || dream.text);
+  return String((getHashNumber(source) % 90) + 10).padStart(2, '0');
+}
+
+function getHashNumber(text) {
+  return [...String(text)].reduce((hash, char) => ((hash * 31) + char.charCodeAt(0)) >>> 0, 7);
 }
 
 function showToast(message) {
@@ -1185,8 +1297,23 @@ function updateCardGlow(event) {
 }
 
 function formatDate(dateString) {
-  const date = new Date(`${dateString}T00:00:00`);
+  const date = parseDreamDate(dateString);
   return date.toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' });
+}
+
+function formatDreamTimestampHtml(dateString) {
+  const date = parseDreamDate(dateString);
+  const hours = String(date.getHours()).padStart(2, '0');
+  const minutes = String(date.getMinutes()).padStart(2, '0');
+  const weekdays = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六'];
+  return `<span class="date-latin">${hours}:${minutes} • ${date.getFullYear()}/${date.getMonth() + 1}/${date.getDate()}</span><span class="date-weekday"> ${weekdays[date.getDay()]}</span>`;
+}
+
+function parseDreamDate(dateString) {
+  const raw = String(dateString || '').trim();
+  const value = raw.includes('T') ? raw : `${raw || new Date().toISOString().slice(0, 10)}T00:00:00`;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? new Date() : date;
 }
 
 function escapeHtml(text) {

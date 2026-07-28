@@ -4,6 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Déjà vu · 检索</title>
+  <link rel="icon" href="/icon.svg" type="image/svg+xml" />
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
   <script src="../tailwind.config.js"></script>
@@ -130,14 +131,23 @@
 
   <template id="dreamCardTemplate">
     <article class="dream-card" tabindex="0">
-      <div class="meta-row">
+      <div class="dream-card-head">
+        <div class="dream-author-block">
+          <span class="dream-avatar" aria-hidden="true"></span>
+          <span class="dream-author-copy">
+            <span class="dream-author"></span>
+            <span class="dream-handle"></span>
+          </span>
+        </div>
         <span class="emotion-badge"></span>
-        <span class="dream-date text-xs text-stone-500"></span>
       </div>
       <p class="card-text dream-text"></p>
-      <div class="relative mt-5 flex items-center justify-between gap-3 text-xs text-stone-500">
-        <span class="dream-author"></span>
-        <span class="dream-visibility"></span>
+      <div class="dream-card-foot">
+        <span class="dream-time"><i class="fa-regular fa-clock"></i><span class="dream-date"></span></span>
+        <span class="dream-social" aria-label="互动预留">
+          <span><i class="fa-regular fa-heart"></i>0</span>
+          <span><i class="fa-regular fa-comment"></i>0</span>
+        </span>
       </div>
     </article>
   </template>
