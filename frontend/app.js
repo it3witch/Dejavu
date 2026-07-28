@@ -51,6 +51,27 @@ const MOCK_DREAMS = [
 const MIN_DREAM_LENGTH = 5;
 const VISIBLE_EMOTION_LIMIT = 4;
 const BASE_EMOTIONS = ['喜悦', '焦虑', '诡异', '科幻', '平静', '怀旧', '迷失', '浪漫', '荒诞', '清醒'];
+const ROUTES = {
+  journal: '/',
+  search: '/search/',
+  square: '/square/'
+};
+const ROUTE_TITLES = {
+  journal: 'Déjà vu',
+  search: 'Déjà vu · 检索',
+  square: 'Déjà vu · 大厅'
+};
+const pageCache = new Map();
+let routeRequestId = 0;
+const viewMemory = {
+  journal: {
+    text: '',
+    isPublic: false
+  },
+  search: {
+    query: ''
+  }
+};
 
 const SUPABASE_URL = (window.DEJAVU_SUPABASE_URL || '').trim();
 const SUPABASE_ANON_KEY = (window.DEJAVU_SUPABASE_ANON_KEY || '').trim();
@@ -103,6 +124,7 @@ const emotionMeta = {
 };
 
 const dom = {
+  main: document.querySelector('main'),
   nav: document.querySelector('#mainNav'),
   navButtons: document.querySelectorAll('.nav-button'),
   views: document.querySelectorAll('[data-view]'),
@@ -148,6 +170,55 @@ const dom = {
   signOutButton: document.querySelector('#signOutButton')
 };
 
+function refreshDom() {
+  Object.assign(dom, {
+    main: document.querySelector('main'),
+    nav: document.querySelector('#mainNav'),
+    navButtons: document.querySelectorAll('.nav-button'),
+    views: document.querySelectorAll('[data-view]'),
+    dreamForm: document.querySelector('#dreamForm'),
+    dreamText: document.querySelector('#dreamText'),
+    charCount: document.querySelector('#charCount'),
+    publicSwitch: document.querySelector('#publicSwitch'),
+    emotionTrigger: document.querySelector('#emotionTrigger'),
+    emotionMenu: document.querySelector('#emotionMenu'),
+    emotionIcon: document.querySelector('#emotionIcon'),
+    emotionList: document.querySelector('#emotionList'),
+    emotionMoreButton: document.querySelector('#emotionMoreButton'),
+    searchForm: document.querySelector('#searchForm'),
+    searchText: document.querySelector('#searchText'),
+    searchResults: document.querySelector('#searchResults'),
+    resultBrief: document.querySelector('#resultBrief'),
+    squareModes: document.querySelector('#squareModes'),
+    squareFilters: document.querySelector('#squareFilters'),
+    squareList: document.querySelector('#squareList'),
+    detailModal: document.querySelector('#detailModal'),
+    modalMeta: document.querySelector('#modalMeta'),
+    modalText: document.querySelector('#modalText'),
+    modalFoot: document.querySelector('#modalFoot'),
+    closeModal: document.querySelector('#closeModal'),
+    template: document.querySelector('#dreamCardTemplate'),
+    toast: document.querySelector('#toast'),
+    vignette: document.querySelector('#softVignette'),
+    accountButton: document.querySelector('#accountButton'),
+    accountLabel: document.querySelector('#accountLabel'),
+    authModal: document.querySelector('#authModal'),
+    authClose: document.querySelector('#authClose'),
+    authSetupPanel: document.querySelector('#authSetupPanel'),
+    authLoginPanel: document.querySelector('#authLoginPanel'),
+    authSignedInPanel: document.querySelector('#authSignedInPanel'),
+    authForm: document.querySelector('#authForm'),
+    authEmail: document.querySelector('#authEmail'),
+    authOtp: document.querySelector('#authOtp'),
+    authSubmit: document.querySelector('#authSubmit'),
+    authSubmitLabel: document.querySelector('#authSubmitLabel'),
+    authBackButton: document.querySelector('#authBackButton'),
+    authMessage: document.querySelector('#authMessage'),
+    authUser: document.querySelector('#authUser'),
+    signOutButton: document.querySelector('#signOutButton')
+  });
+}
+
 syncViewportHeight();
 init();
 
@@ -169,11 +240,9 @@ function syncViewportHeight() {
 async function init() {
   bindEvents();
   setView(state.activeView);
-  syncEmotionCatalog();
-  renderEmotionMenu();
-  renderSquareFilters();
-  renderAll();
-  renderEmptySearch();
+  renderCurrentPage();
+  pageCache.set(state.activeView, dom.main?.innerHTML || '');
+  window.history.replaceState({ view: state.activeView }, '', ROUTES[state.activeView]);
   startLofiBackground();
   renderAuthState();
 
@@ -198,16 +267,65 @@ async function init() {
 }
 
 function bindEvents() {
-  dom.dreamText?.addEventListener('input', updateCharCount);
-  dom.dreamForm?.addEventListener('submit', handleDreamSubmit);
-  dom.emotionTrigger?.addEventListener('click', toggleEmotionMenu);
-  dom.emotionMoreButton?.addEventListener('click', toggleEmotionExpansion);
-
   document.addEventListener('click', (event) => {
+    const routeLink = event.target.closest('a[data-route]');
+    if (shouldHandleRouteClick(event, routeLink)) {
+      event.preventDefault();
+      navigateTo(routeLink.dataset.route);
+      return;
+    }
+
     if (!event.target.closest('.emotion-picker')) {
       closeEmotionMenu();
     }
   });
+
+  document.addEventListener('pointerover', (event) => {
+    const routeLink = event.target.closest('a[data-route]');
+    if (routeLink) preloadRoute(routeLink.dataset.route);
+  });
+
+  dom.closeModal?.addEventListener('click', closeDetail);
+  dom.detailModal?.addEventListener('click', (event) => {
+    if (event.target === dom.detailModal) closeDetail();
+  });
+
+  dom.accountButton?.addEventListener('click', openAuthModal);
+  dom.authClose?.addEventListener('click', closeAuthModal);
+  dom.authModal?.addEventListener('click', (event) => {
+    if (event.target === dom.authModal) closeAuthModal();
+  });
+  dom.authForm?.addEventListener('submit', handleAuthSubmit);
+  dom.authBackButton?.addEventListener('click', resetAuthForm);
+  dom.signOutButton?.addEventListener('click', signOut);
+
+  document.addEventListener('mousemove', (event) => {
+    if (!dom.vignette) return;
+    dom.vignette.style.setProperty('--mx', `${event.clientX}px`);
+    dom.vignette.style.setProperty('--my', `${event.clientY}px`);
+  });
+
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') {
+      closeEmotionMenu();
+      closeDetail();
+      closeAuthModal();
+    }
+  });
+
+  document.addEventListener('pointermove', updateCardGlow);
+  window.addEventListener('popstate', () => {
+    navigateTo(getInitialView(), { updateHistory: false });
+  });
+
+  bindPageEvents();
+}
+
+function bindPageEvents() {
+  dom.dreamText?.addEventListener('input', updateCharCount);
+  dom.dreamForm?.addEventListener('submit', handleDreamSubmit);
+  dom.emotionTrigger?.addEventListener('click', toggleEmotionMenu);
+  dom.emotionMoreButton?.addEventListener('click', toggleEmotionExpansion);
 
   dom.searchForm?.addEventListener('submit', (event) => {
     event.preventDefault();
@@ -240,36 +358,6 @@ function bindEvents() {
     });
     renderSquare();
   });
-
-  dom.closeModal?.addEventListener('click', closeDetail);
-  dom.detailModal?.addEventListener('click', (event) => {
-    if (event.target === dom.detailModal) closeDetail();
-  });
-
-  dom.accountButton?.addEventListener('click', openAuthModal);
-  dom.authClose?.addEventListener('click', closeAuthModal);
-  dom.authModal?.addEventListener('click', (event) => {
-    if (event.target === dom.authModal) closeAuthModal();
-  });
-  dom.authForm?.addEventListener('submit', handleAuthSubmit);
-  dom.authBackButton?.addEventListener('click', resetAuthForm);
-  dom.signOutButton?.addEventListener('click', signOut);
-
-  document.addEventListener('mousemove', (event) => {
-    if (!dom.vignette) return;
-    dom.vignette.style.setProperty('--mx', `${event.clientX}px`);
-    dom.vignette.style.setProperty('--my', `${event.clientY}px`);
-  });
-
-  document.addEventListener('keydown', (event) => {
-    if (event.key === 'Escape') {
-      closeEmotionMenu();
-      closeDetail();
-      closeAuthModal();
-    }
-  });
-
-  document.addEventListener('pointermove', updateCardGlow);
 }
 
 function setView(viewName) {
@@ -292,10 +380,162 @@ function setView(viewName) {
 }
 
 function getInitialView() {
-  const path = window.location.pathname.toLowerCase();
-  if (path.includes('/search')) return 'search';
-  if (path.includes('/square')) return 'square';
+  const path = window.location.pathname.toLowerCase().replace(/\/+$/, '') || '/';
+  if (path.endsWith('/search')) return 'search';
+  if (path.endsWith('/square')) return 'square';
   return 'journal';
+}
+
+function shouldHandleRouteClick(event, routeLink) {
+  if (!routeLink || !ROUTES[routeLink.dataset.route]) return false;
+  if (event.defaultPrevented || event.button !== 0) return false;
+  if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return false;
+  if (routeLink.target && routeLink.target !== '_self') return false;
+
+  const url = new URL(routeLink.href, window.location.href);
+  return url.origin === window.location.origin;
+}
+
+async function navigateTo(viewName, options = {}) {
+  if (!ROUTES[viewName]) return;
+
+  const updateHistory = options.updateHistory !== false;
+  const routePath = ROUTES[viewName];
+
+  if (viewName === state.activeView && dom.views[0]?.dataset.view === viewName) {
+    setView(viewName);
+    if (updateHistory && window.location.pathname !== routePath) {
+      window.history.pushState({ view: viewName }, '', routePath);
+    }
+    return;
+  }
+
+  try {
+    saveCurrentViewState();
+    const requestId = ++routeRequestId;
+    const nextMainHtml = await getRouteMain(viewName);
+    if (requestId !== routeRequestId) return;
+
+    const swapPage = () => {
+      if (!dom.main) {
+        window.location.href = routePath;
+        return;
+      }
+
+      dom.main.innerHTML = nextMainHtml;
+      refreshDom();
+      bindPageEvents();
+      setView(viewName);
+      renderCurrentPage();
+      document.title = ROUTE_TITLES[viewName] || 'Déjà vu';
+      closeEmotionMenu();
+      closeDetail();
+    };
+
+    if (document.startViewTransition) {
+      await document.startViewTransition(swapPage).finished;
+    } else {
+      dom.main?.classList.add('route-fading');
+      swapPage();
+      requestAnimationFrame(() => dom.main?.classList.remove('route-fading'));
+    }
+
+    if (updateHistory && window.location.pathname !== routePath) {
+      window.history.pushState({ view: viewName }, '', routePath);
+    }
+  } catch (error) {
+    console.warn('Soft navigation failed:', error);
+    window.location.href = routePath;
+  }
+}
+
+async function preloadRoute(viewName) {
+  if (!ROUTES[viewName] || pageCache.has(viewName)) return;
+  try {
+    await getRouteMain(viewName);
+  } catch (error) {
+    console.warn('Route preload failed:', error);
+  }
+}
+
+async function getRouteMain(viewName) {
+  if (pageCache.has(viewName)) {
+    return pageCache.get(viewName);
+  }
+
+  const response = await fetch(ROUTES[viewName], {
+    headers: {
+      'X-Requested-With': 'dejavu-soft-route'
+    }
+  });
+  if (!response.ok) {
+    throw new Error(`Route ${viewName} returned ${response.status}`);
+  }
+
+  const html = await response.text();
+  const doc = new DOMParser().parseFromString(html, 'text/html');
+  const main = doc.querySelector('main');
+  if (!main) {
+    throw new Error(`Route ${viewName} has no main content`);
+  }
+
+  const mainHtml = main.innerHTML;
+  pageCache.set(viewName, mainHtml);
+  return mainHtml;
+}
+
+function renderCurrentPage() {
+  syncEmotionCatalog();
+
+  if (state.activeView === 'journal') {
+    renderEmotionMenu();
+    restoreCurrentViewState();
+    updateCharCount();
+    return;
+  }
+
+  if (state.activeView === 'search') {
+    renderEmptySearch();
+    restoreCurrentViewState();
+    return;
+  }
+
+  if (state.activeView === 'square') {
+    renderSquareFilters();
+    renderSquare();
+  }
+}
+
+function saveCurrentViewState() {
+  if (state.activeView === 'journal') {
+    viewMemory.journal.text = dom.dreamText?.value || '';
+    viewMemory.journal.isPublic = Boolean(dom.publicSwitch?.checked);
+    return;
+  }
+
+  if (state.activeView === 'search') {
+    viewMemory.search.query = dom.searchText?.value || '';
+  }
+}
+
+function restoreCurrentViewState() {
+  if (state.activeView === 'journal') {
+    if (dom.dreamText) {
+      dom.dreamText.value = viewMemory.journal.text;
+    }
+    if (dom.publicSwitch) {
+      dom.publicSwitch.checked = viewMemory.journal.isPublic;
+    }
+    setEmotion(state.selectedEmotion);
+    return;
+  }
+
+  if (state.activeView === 'search' && dom.searchText) {
+    dom.searchText.value = viewMemory.search.query;
+    if (viewMemory.search.query.trim()) {
+      runSearch();
+    }
+  }
 }
 
 function setSession(session) {
@@ -621,6 +861,8 @@ function handleDreamSubmit(event) {
 
       dom.dreamText.value = '';
       dom.publicSwitch.checked = false;
+      viewMemory.journal.text = '';
+      viewMemory.journal.isPublic = false;
       updateCharCount();
       renderAll();
 
