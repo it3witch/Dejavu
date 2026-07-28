@@ -357,13 +357,13 @@ async function sendEmailOtp(email) {
   dom.authOtp.focus();
   dom.authSubmitLabel.textContent = '验证并登录';
   dom.authBackButton.classList.remove('hidden');
-  setAuthMessage('验证码已经发到邮箱。复制 6 位数字填在这里。若邮件只有链接，请把 Supabase 邮件模板改成 Token。');
+  setAuthMessage('验证码已发送到邮箱。请复制邮件里的 8 位数字验证码填在这里，验证码通常几分钟内有效。');
 }
 
 async function verifyEmailOtp(email) {
   const token = dom.authOtp.value.trim().replace(/\s+/g, '');
-  if (token.length < 6) {
-    setAuthMessage('请输入 6 位验证码。', true);
+  if (!/^\d{8}$/.test(token)) {
+    setAuthMessage('请输入 8 位数字验证码。', true);
     dom.authOtp.focus();
     return;
   }
@@ -439,7 +439,7 @@ function formatAuthError(error, action) {
 
   return action === 'send'
     ? '验证码发送失败。常见原因是 SMTP 还没配置好、Resend 域名仍在 Pending，或 Supabase 邮件限流尚未恢复。'
-    : '验证码验证失败，请确认邮箱和 6 位验证码是否正确。';
+    : '验证码验证失败，请确认邮箱和 8 位验证码是否正确。';
 }
 
 function getErrorMessage(error) {

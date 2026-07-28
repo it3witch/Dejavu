@@ -39,7 +39,7 @@
           </header>
           <form id="dreamForm" class="panel journal-card" autocomplete="off">
             <div class="note-count" id="charCount">0</div>
-            <textarea id="dreamText" class="text-field dream-input" placeholder="写下梦里残留的一句话、一个地点或一段声音。"></textarea>
+            <textarea id="dreamText" class="text-field dream-input" placeholder="写下梦里残留的一个人、一处地点或一段声音。"></textarea>
 
             <div class="journal-actions">
               <div class="action-left">
@@ -71,7 +71,7 @@
           <div class="publish-bar">
             <button class="publish-button" type="submit" form="dreamForm">
               <i class="fa-solid fa-paper-plane"></i>
-              <span>保存并发布</span>
+              <span>保存并上传</span>
             </button>
           </div>
         </div>
@@ -81,8 +81,8 @@
         <div class="search-layout">
           <form id="searchForm" class="panel search-card" autocomplete="off">
             <span class="section-label"><i class="fa-solid fa-wave-square"></i> Recall</span>
-            <h2 class="section-title">回想一下...</h2>
-            <p class="section-subtitle">回忆你的梦并匹配最相似的梦，看看有没有人跟你梦到一样的东西吧！</p>
+            <h2 class="section-title">共鸣...</h2>
+            <p class="section-subtitle">回忆一下吧！看看有没有人跟你梦到的一样？</p>
 
             <div class="mt-7">
               <label class="field-head" for="searchText">
@@ -111,7 +111,7 @@
           <div class="square-head">
             <div>
               <span class="section-label"><i class="fa-solid fa-layer-group"></i> Public</span>
-              <h2 class="section-title">梦境大厅</h2>
+              <h2 class="section-title">所有人的梦</h2>
             </div>
             <div class="square-controls">
               <div id="squareModes" class="mode-row" aria-label="大厅内容">
@@ -156,10 +156,10 @@
       <div id="authLoginPanel" class="auth-panel">
         <span class="section-label"><i class="fa-regular fa-envelope"></i> Account</span>
         <h2 class="auth-title">进入梦境</h2>
-        <p class="auth-copy">输入邮箱，收到邮件后把 6 位验证码填回来。</p>
+        <p class="auth-copy">输入邮箱，收到邮件后请填入 8 位验证码</p>
         <form id="authForm" class="auth-form" autocomplete="on">
           <input id="authEmail" class="auth-input" type="email" placeholder="you@example.com" required />
-          <input id="authOtp" class="auth-input hidden" type="text" inputmode="numeric" maxlength="6" placeholder="6 位验证码" />
+          <input id="authOtp" class="auth-input hidden" type="text" inputmode="numeric" maxlength="8" pattern="[0-9]{8}" autocomplete="one-time-code" placeholder="8 位验证码" />
           <button id="authSubmit" class="primary-button w-full" type="submit">
             <i class="fa-solid fa-paper-plane"></i>
             <span id="authSubmitLabel">发送邮箱验证码</span>
