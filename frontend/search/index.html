@@ -3,12 +3,12 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Déjà vu</title>
+  <title>Déjà vu · 检索</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
-  <script src="./tailwind.config.js"></script>
-  <link rel="stylesheet" href="./styles.css" />
-  <script src="./config.js"></script>
+  <script src="../tailwind.config.js"></script>
+  <link rel="stylesheet" href="../styles.css" />
+  <script src="../config.js"></script>
 </head>
 <body>
   <canvas id="lofiCanvas" aria-hidden="true"></canvas>
@@ -16,68 +16,49 @@
 
   <div class="app">
     <header class="topbar">
-      <nav id="mainNav" class="nav" data-active="journal" aria-label="主菜单">
+      <nav id="mainNav" class="nav" data-active="search" aria-label="主菜单">
         <div class="nav-indicator" aria-hidden="true"></div>
-        <a class="nav-button active" href="./" data-route="journal" aria-current="page">
+        <a class="nav-button" href="../" data-route="journal">
           <i class="fa-solid fa-pen-nib"></i><span>记录</span>
         </a>
-        <a class="nav-button" href="./search/" data-route="search">
+        <a class="nav-button active" href="./" data-route="search" aria-current="page">
           <i class="fa-solid fa-magnifying-glass"></i><span>检索</span>
         </a>
-        <a class="nav-button" href="./square/" data-route="square">
+        <a class="nav-button" href="../square/" data-route="square">
           <i class="fa-solid fa-layer-group"></i><span>大厅</span>
         </a>
       </nav>
     </header>
 
     <main>
-      <section id="journalView" class="view active" data-view="journal">
-        <div class="journal-wrap">
-          <header class="journal-heading">
-            <h1 class="quiet-title">你梦到了什么？</h1>
-            <p class="journal-subtitle">写下你印象最深的梦吧，当然随便写点什么也不错...</p>
-          </header>
-          <form id="dreamForm" class="panel journal-card" autocomplete="off">
-            <div class="note-count" id="charCount">0</div>
-            <textarea id="dreamText" class="text-field dream-input" placeholder="写下梦里残留的一个人、一处地点或一段声音。"></textarea>
+      <section id="searchView" class="view active" data-view="search">
+        <div class="search-layout">
+          <form id="searchForm" class="panel search-card" autocomplete="off">
+            <span class="section-label"><i class="fa-solid fa-wave-square"></i> Recall</span>
+            <h2 class="section-title">共鸣...</h2>
+            <p class="section-subtitle">回忆一下吧！看看有没有人跟你梦到的一样？</p>
 
-            <div class="journal-actions">
-              <div class="action-left">
-                <div class="emotion-picker">
-                  <button id="emotionTrigger" class="emotion-orb" type="button" aria-label="选择标签" aria-expanded="false">
-                    <i id="emotionIcon" class="fa-regular fa-face-smile"></i>
-                  </button>
-                  <div id="emotionMenu" class="emotion-menu" role="menu" aria-label="标签菜单">
-                    <div class="emotion-menu-head">选择标签</div>
-                    <div id="emotionList" class="emotion-list"></div>
-                    <button id="emotionMoreButton" class="emotion-more-button" type="button" aria-expanded="false">
-                      <i class="fa-solid fa-chevron-down"></i><span>更多标签</span>
-                    </button>
-                    <div class="custom-tag-row" aria-disabled="true">
-                      <i class="fa-solid fa-screwdriver-wrench"></i>
-                      <span>自定义标签维护中</span>
-                    </div>
-                  </div>
-                </div>
-
-                <label class="switch">
-                  <span>匿名公开</span>
-                  <input id="publicSwitch" class="sr-only" type="checkbox" />
-                  <span class="switch-track" aria-hidden="true"><span class="switch-dot"></span></span>
-                </label>
+            <div class="mt-7">
+              <label class="field-head" for="searchText">
+                <span>现实场景</span>
+                <span id="resultBrief">待检索</span>
+              </label>
+              <textarea id="searchText" class="text-field scene-input" placeholder="雨后的巷子，红色售货机，熟悉的门。"></textarea>
+              <div class="quick-row">
+                <button class="quick-chip" type="button" data-query="雨后的街道，红色自动售货机，一只会发光的猫从霓虹灯下面经过。">雨夜</button>
+                <button class="quick-chip" type="button" data-query="地铁站没有尽头，广播念着我的名字，墙上全是小时候的照片。">地铁</button>
+                <button class="quick-chip" type="button" data-query="办公室漂浮在太空里，电脑屏幕像星图一样展开。">太空</button>
               </div>
             </div>
+
+            <button id="runSearch" class="primary-button mt-6 w-full" type="submit">
+              <i class="fa-solid fa-magnifying-glass"></i>检索
+            </button>
           </form>
 
-          <div class="publish-bar">
-            <button class="publish-button" type="submit" form="dreamForm">
-              <i class="fa-solid fa-paper-plane"></i>
-              <span>保存并上传</span>
-            </button>
-          </div>
+          <div id="searchResults" class="result-stack"></div>
         </div>
       </section>
-
     </main>
 
     <footer class="site-footer">dejavu 2026</footer>
@@ -161,6 +142,6 @@
     </article>
   </template>
 
-  <script type="module" src="./app.js"></script>
+  <script type="module" src="../app.js"></script>
 </body>
 </html>

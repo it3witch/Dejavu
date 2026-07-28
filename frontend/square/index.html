@@ -3,12 +3,12 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Déjà vu</title>
+  <title>Déjà vu · 大厅</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
-  <script src="./tailwind.config.js"></script>
-  <link rel="stylesheet" href="./styles.css" />
-  <script src="./config.js"></script>
+  <script src="../tailwind.config.js"></script>
+  <link rel="stylesheet" href="../styles.css" />
+  <script src="../config.js"></script>
 </head>
 <body>
   <canvas id="lofiCanvas" aria-hidden="true"></canvas>
@@ -16,68 +16,45 @@
 
   <div class="app">
     <header class="topbar">
-      <nav id="mainNav" class="nav" data-active="journal" aria-label="主菜单">
+      <nav id="mainNav" class="nav" data-active="square" aria-label="主菜单">
         <div class="nav-indicator" aria-hidden="true"></div>
-        <a class="nav-button active" href="./" data-route="journal" aria-current="page">
+        <a class="nav-button" href="../" data-route="journal">
           <i class="fa-solid fa-pen-nib"></i><span>记录</span>
         </a>
-        <a class="nav-button" href="./search/" data-route="search">
+        <a class="nav-button" href="../search/" data-route="search">
           <i class="fa-solid fa-magnifying-glass"></i><span>检索</span>
         </a>
-        <a class="nav-button" href="./square/" data-route="square">
+        <a class="nav-button active" href="./" data-route="square" aria-current="page">
           <i class="fa-solid fa-layer-group"></i><span>大厅</span>
         </a>
       </nav>
     </header>
 
     <main>
-      <section id="journalView" class="view active" data-view="journal">
-        <div class="journal-wrap">
-          <header class="journal-heading">
-            <h1 class="quiet-title">你梦到了什么？</h1>
-            <p class="journal-subtitle">写下你印象最深的梦吧，当然随便写点什么也不错...</p>
-          </header>
-          <form id="dreamForm" class="panel journal-card" autocomplete="off">
-            <div class="note-count" id="charCount">0</div>
-            <textarea id="dreamText" class="text-field dream-input" placeholder="写下梦里残留的一个人、一处地点或一段声音。"></textarea>
-
-            <div class="journal-actions">
-              <div class="action-left">
-                <div class="emotion-picker">
-                  <button id="emotionTrigger" class="emotion-orb" type="button" aria-label="选择标签" aria-expanded="false">
-                    <i id="emotionIcon" class="fa-regular fa-face-smile"></i>
-                  </button>
-                  <div id="emotionMenu" class="emotion-menu" role="menu" aria-label="标签菜单">
-                    <div class="emotion-menu-head">选择标签</div>
-                    <div id="emotionList" class="emotion-list"></div>
-                    <button id="emotionMoreButton" class="emotion-more-button" type="button" aria-expanded="false">
-                      <i class="fa-solid fa-chevron-down"></i><span>更多标签</span>
-                    </button>
-                    <div class="custom-tag-row" aria-disabled="true">
-                      <i class="fa-solid fa-screwdriver-wrench"></i>
-                      <span>自定义标签维护中</span>
-                    </div>
-                  </div>
-                </div>
-
-                <label class="switch">
-                  <span>匿名公开</span>
-                  <input id="publicSwitch" class="sr-only" type="checkbox" />
-                  <span class="switch-track" aria-hidden="true"><span class="switch-dot"></span></span>
-                </label>
+      <section id="squareView" class="view square-view active" data-view="square">
+        <div class="w-full">
+          <div class="square-head">
+            <div>
+              <span class="section-label"><i class="fa-solid fa-layer-group"></i> Public</span>
+              <h2 class="section-title">所有人的梦</h2>
+            </div>
+            <div class="square-controls">
+              <div id="squareModes" class="mode-row" aria-label="大厅内容">
+                <button class="filter-chip active" type="button" data-square-mode="public">公开</button>
+                <button class="filter-chip" type="button" data-square-mode="history">历史</button>
+              </div>
+              <div id="squareFilters" class="filter-row">
+                <button class="filter-chip active" type="button" data-filter="全部">全部</button>
+                <button class="filter-chip" type="button" data-filter="喜悦">喜悦</button>
+                <button class="filter-chip" type="button" data-filter="焦虑">焦虑</button>
+                <button class="filter-chip" type="button" data-filter="诡异">诡异</button>
+                <button class="filter-chip" type="button" data-filter="科幻">科幻</button>
               </div>
             </div>
-          </form>
-
-          <div class="publish-bar">
-            <button class="publish-button" type="submit" form="dreamForm">
-              <i class="fa-solid fa-paper-plane"></i>
-              <span>保存并上传</span>
-            </button>
           </div>
+          <div id="squareList" class="square-grid"></div>
         </div>
       </section>
-
     </main>
 
     <footer class="site-footer">dejavu 2026</footer>
@@ -161,6 +138,6 @@
     </article>
   </template>
 
-  <script type="module" src="./app.js"></script>
+  <script type="module" src="../app.js"></script>
 </body>
 </html>

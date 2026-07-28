@@ -48,6 +48,10 @@ const MOCK_DREAMS = [
   }
 ];
 
+const MIN_DREAM_LENGTH = 5;
+const VISIBLE_EMOTION_LIMIT = 4;
+const BASE_EMOTIONS = ['喜悦', '焦虑', '诡异', '科幻', '平静', '怀旧', '迷失', '浪漫', '荒诞', '清醒'];
+
 const SUPABASE_URL = (window.DEJAVU_SUPABASE_URL || '').trim();
 const SUPABASE_ANON_KEY = (window.DEJAVU_SUPABASE_ANON_KEY || '').trim();
 const HAS_SUPABASE_CONFIG = Boolean(
@@ -71,11 +75,12 @@ const supabase = HAS_SUPABASE_CONFIG
 const dreams = [...MOCK_DREAMS];
 
 const state = {
-  activeView: 'journal',
+  activeView: getInitialView(),
   squareFilter: '全部',
   squareMode: 'public',
   selectedEmotion: '喜悦',
-  emotions: ['喜悦', '焦虑', '诡异', '科幻'],
+  emotions: [...BASE_EMOTIONS],
+  showAllEmotions: false,
   session: null,
   user: null,
   pendingAuthEmail: '',
@@ -88,12 +93,17 @@ const emotionMeta = {
   '焦虑': { icon: 'fa-solid fa-bolt' },
   '诡异': { icon: 'fa-solid fa-eye' },
   '科幻': { icon: 'fa-solid fa-rocket' },
+  '平静': { icon: 'fa-regular fa-moon' },
+  '怀旧': { icon: 'fa-solid fa-clock-rotate-left' },
+  '迷失': { icon: 'fa-regular fa-compass' },
+  '浪漫': { icon: 'fa-regular fa-heart' },
+  '荒诞': { icon: 'fa-solid fa-wand-magic-sparkles' },
+  '清醒': { icon: 'fa-regular fa-lightbulb' },
   default: { icon: 'fa-solid fa-tag' }
 };
 
 const dom = {
   nav: document.querySelector('#mainNav'),
-  routeButtons: document.querySelectorAll('[data-route]'),
   navButtons: document.querySelectorAll('.nav-button'),
   views: document.querySelectorAll('[data-view]'),
   dreamForm: document.querySelector('#dreamForm'),
@@ -104,8 +114,7 @@ const dom = {
   emotionMenu: document.querySelector('#emotionMenu'),
   emotionIcon: document.querySelector('#emotionIcon'),
   emotionList: document.querySelector('#emotionList'),
-  customEmotionInput: document.querySelector('#customEmotionInput'),
-  addEmotionButton: document.querySelector('#addEmotionButton'),
+  emotionMoreButton: document.querySelector('#emotionMoreButton'),
   searchForm: document.querySelector('#searchForm'),
   searchText: document.querySelector('#searchText'),
   searchResults: document.querySelector('#searchResults'),
@@ -159,6 +168,7 @@ function syncViewportHeight() {
 
 async function init() {
   bindEvents();
+  setView(state.activeView);
   syncEmotionCatalog();
   renderEmotionMenu();
   renderSquareFilters();
@@ -188,20 +198,10 @@ async function init() {
 }
 
 function bindEvents() {
-  dom.routeButtons.forEach((button) => {
-    button.addEventListener('click', () => setView(button.dataset.route));
-  });
-
-  dom.dreamText.addEventListener('input', updateCharCount);
-  dom.dreamForm.addEventListener('submit', handleDreamSubmit);
-  dom.emotionTrigger.addEventListener('click', toggleEmotionMenu);
-  dom.addEmotionButton.addEventListener('click', addCustomEmotion);
-  dom.customEmotionInput.addEventListener('keydown', (event) => {
-    if (event.key === 'Enter') {
-      event.preventDefault();
-      addCustomEmotion();
-    }
-  });
+  dom.dreamText?.addEventListener('input', updateCharCount);
+  dom.dreamForm?.addEventListener('submit', handleDreamSubmit);
+  dom.emotionTrigger?.addEventListener('click', toggleEmotionMenu);
+  dom.emotionMoreButton?.addEventListener('click', toggleEmotionExpansion);
 
   document.addEventListener('click', (event) => {
     if (!event.target.closest('.emotion-picker')) {
@@ -209,7 +209,7 @@ function bindEvents() {
     }
   });
 
-  dom.searchForm.addEventListener('submit', (event) => {
+  dom.searchForm?.addEventListener('submit', (event) => {
     event.preventDefault();
     runSearch();
   });
@@ -221,7 +221,7 @@ function bindEvents() {
     });
   });
 
-  dom.squareFilters.addEventListener('click', (event) => {
+  dom.squareFilters?.addEventListener('click', (event) => {
     const chip = event.target.closest('[data-filter]');
     if (!chip) return;
     state.squareFilter = chip.dataset.filter;
@@ -231,7 +231,7 @@ function bindEvents() {
     renderSquare();
   });
 
-  dom.squareModes.addEventListener('click', (event) => {
+  dom.squareModes?.addEventListener('click', (event) => {
     const chip = event.target.closest('[data-square-mode]');
     if (!chip) return;
     state.squareMode = chip.dataset.squareMode;
@@ -241,21 +241,22 @@ function bindEvents() {
     renderSquare();
   });
 
-  dom.closeModal.addEventListener('click', closeDetail);
-  dom.detailModal.addEventListener('click', (event) => {
+  dom.closeModal?.addEventListener('click', closeDetail);
+  dom.detailModal?.addEventListener('click', (event) => {
     if (event.target === dom.detailModal) closeDetail();
   });
 
-  dom.accountButton.addEventListener('click', openAuthModal);
-  dom.authClose.addEventListener('click', closeAuthModal);
-  dom.authModal.addEventListener('click', (event) => {
+  dom.accountButton?.addEventListener('click', openAuthModal);
+  dom.authClose?.addEventListener('click', closeAuthModal);
+  dom.authModal?.addEventListener('click', (event) => {
     if (event.target === dom.authModal) closeAuthModal();
   });
-  dom.authForm.addEventListener('submit', handleAuthSubmit);
-  dom.authBackButton.addEventListener('click', resetAuthForm);
-  dom.signOutButton.addEventListener('click', signOut);
+  dom.authForm?.addEventListener('submit', handleAuthSubmit);
+  dom.authBackButton?.addEventListener('click', resetAuthForm);
+  dom.signOutButton?.addEventListener('click', signOut);
 
   document.addEventListener('mousemove', (event) => {
+    if (!dom.vignette) return;
     dom.vignette.style.setProperty('--mx', `${event.clientX}px`);
     dom.vignette.style.setProperty('--my', `${event.clientY}px`);
   });
@@ -273,13 +274,28 @@ function bindEvents() {
 
 function setView(viewName) {
   state.activeView = viewName;
-  dom.nav.dataset.active = viewName;
+  if (dom.nav) {
+    dom.nav.dataset.active = viewName;
+  }
   dom.navButtons.forEach((button) => {
-    button.classList.toggle('active', button.dataset.route === viewName);
+    const isActive = button.dataset.route === viewName;
+    button.classList.toggle('active', isActive);
+    if (isActive) {
+      button.setAttribute('aria-current', 'page');
+    } else {
+      button.removeAttribute('aria-current');
+    }
   });
   dom.views.forEach((view) => {
     view.classList.toggle('active', view.dataset.view === viewName);
   });
+}
+
+function getInitialView() {
+  const path = window.location.pathname.toLowerCase();
+  if (path.includes('/search')) return 'search';
+  if (path.includes('/square')) return 'square';
+  return 'journal';
 }
 
 function setSession(session) {
@@ -291,14 +307,16 @@ function setSession(session) {
 function renderAuthState() {
   const signedIn = Boolean(state.user);
 
-  dom.accountLabel.textContent = signedIn ? getEmailName(state.user.email) : (HAS_SUPABASE_CONFIG ? '登录' : '配置');
-  dom.accountButton.querySelector('i').className = signedIn ? 'fa-regular fa-circle-check' : 'fa-regular fa-user';
+  if (dom.accountLabel) {
+    dom.accountLabel.textContent = signedIn ? getEmailName(state.user.email) : (HAS_SUPABASE_CONFIG ? '登录' : '配置');
+  }
+  dom.accountButton?.querySelector('i')?.setAttribute('class', signedIn ? 'fa-regular fa-circle-check' : 'fa-regular fa-user');
 
-  dom.authSetupPanel.classList.toggle('hidden', HAS_SUPABASE_CONFIG);
-  dom.authLoginPanel.classList.toggle('hidden', !HAS_SUPABASE_CONFIG || signedIn);
-  dom.authSignedInPanel.classList.toggle('hidden', !HAS_SUPABASE_CONFIG || !signedIn);
+  dom.authSetupPanel?.classList.toggle('hidden', HAS_SUPABASE_CONFIG);
+  dom.authLoginPanel?.classList.toggle('hidden', !HAS_SUPABASE_CONFIG || signedIn);
+  dom.authSignedInPanel?.classList.toggle('hidden', !HAS_SUPABASE_CONFIG || !signedIn);
 
-  if (signedIn) {
+  if (signedIn && dom.authUser) {
     dom.authUser.textContent = state.user.email || '已登录';
   }
 }
@@ -466,26 +484,31 @@ function getErrorMessage(error) {
 }
 
 function setAuthMessage(message, isError = false) {
+  if (!dom.authMessage) return;
   dom.authMessage.textContent = message;
   dom.authMessage.classList.toggle('error', isError);
 }
 
 function openAuthModal() {
+  if (!dom.authModal) return;
   dom.authModal.classList.add('open');
   dom.authModal.setAttribute('aria-hidden', 'false');
 }
 
 function closeAuthModal() {
+  if (!dom.authModal) return;
   dom.authModal.classList.remove('open');
   dom.authModal.setAttribute('aria-hidden', 'true');
 }
 
 function toggleEmotionMenu() {
+  if (!dom.emotionMenu || !dom.emotionTrigger) return;
   const isOpen = dom.emotionMenu.classList.toggle('open');
   dom.emotionTrigger.setAttribute('aria-expanded', String(isOpen));
 }
 
 function closeEmotionMenu() {
+  if (!dom.emotionMenu || !dom.emotionTrigger) return;
   dom.emotionMenu.classList.remove('open');
   dom.emotionTrigger.setAttribute('aria-expanded', 'false');
 }
@@ -493,9 +516,11 @@ function closeEmotionMenu() {
 function setEmotion(emotion) {
   state.selectedEmotion = emotion;
   const meta = getEmotionMeta(emotion);
-  dom.emotionIcon.className = meta.icon;
-  dom.emotionTrigger.setAttribute('aria-label', `当前标签：${emotion}`);
-  dom.emotionList.querySelectorAll('.emotion-item').forEach((item) => {
+  if (dom.emotionIcon) {
+    dom.emotionIcon.className = meta.icon;
+  }
+  dom.emotionTrigger?.setAttribute('aria-label', `当前标签：${emotion}`);
+  dom.emotionList?.querySelectorAll('.emotion-item').forEach((item) => {
     const active = item.dataset.emotion === emotion;
     item.classList.toggle('active', active);
     item.querySelector('.fa-check').classList.toggle('opacity-0', !active);
@@ -503,11 +528,7 @@ function setEmotion(emotion) {
 }
 
 function syncEmotionCatalog() {
-  dreams.forEach((dream) => {
-    if (!state.emotions.includes(dream.emotion)) {
-      state.emotions.push(dream.emotion);
-    }
-  });
+  state.emotions = [...BASE_EMOTIONS];
 }
 
 function getEmotionMeta(emotion) {
@@ -515,11 +536,17 @@ function getEmotionMeta(emotion) {
 }
 
 function renderEmotionMenu() {
+  if (!dom.emotionList) return;
   dom.emotionList.innerHTML = '';
-  state.emotions.forEach((emotion) => {
+
+  state.emotions.forEach((emotion, index) => {
     const meta = getEmotionMeta(emotion);
     const item = document.createElement('button');
-    item.className = `emotion-item${emotion === state.selectedEmotion ? ' active' : ''}`;
+    item.className = [
+      'emotion-item',
+      emotion === state.selectedEmotion ? 'active' : '',
+      index >= VISIBLE_EMOTION_LIMIT ? 'is-extra' : ''
+    ].filter(Boolean).join(' ');
     item.type = 'button';
     item.dataset.emotion = emotion;
     item.innerHTML = `
@@ -532,25 +559,29 @@ function renderEmotionMenu() {
     });
     dom.emotionList.appendChild(item);
   });
+
+  applyEmotionExpansion();
   setEmotion(state.selectedEmotion);
 }
 
-function addCustomEmotion() {
-  const emotion = dom.customEmotionInput.value.trim().slice(0, 8);
-  if (!emotion) {
-    dom.customEmotionInput.focus();
-    return;
-  }
+function applyEmotionExpansion() {
+  const hasMore = state.emotions.length > VISIBLE_EMOTION_LIMIT;
+  dom.emotionMenu?.classList.toggle('expanded', state.showAllEmotions);
 
-  if (!state.emotions.includes(emotion)) {
-    state.emotions.push(emotion);
-  }
+  if (!dom.emotionMoreButton) return;
 
-  dom.customEmotionInput.value = '';
-  renderEmotionMenu();
-  renderSquareFilters();
-  setEmotion(emotion);
-  showToast('已添加标签');
+  dom.emotionMoreButton.hidden = !hasMore;
+  dom.emotionMoreButton.setAttribute('aria-expanded', String(state.showAllEmotions));
+  dom.emotionMoreButton.innerHTML = state.showAllEmotions
+    ? '<i class="fa-solid fa-chevron-up"></i><span>收起</span>'
+    : '<i class="fa-solid fa-chevron-down"></i><span>更多标签</span>';
+}
+
+function toggleEmotionExpansion(event) {
+  event?.preventDefault();
+  event?.stopPropagation();
+  state.showAllEmotions = !state.showAllEmotions;
+  applyEmotionExpansion();
 }
 
 function handleDreamSubmit(event) {
@@ -561,8 +592,8 @@ function handleDreamSubmit(event) {
   const emotion = state.selectedEmotion;
   const isPublic = dom.publicSwitch.checked;
 
-  if (text.length < 8) {
-    showToast('再多写一点');
+  if (text.length < MIN_DREAM_LENGTH) {
+    showToast(`至少写 ${MIN_DREAM_LENGTH} 个字`);
     dom.dreamText.focus();
     return;
   }
@@ -606,6 +637,7 @@ function handleDreamSubmit(event) {
 }
 
 function updateCharCount() {
+  if (!dom.charCount || !dom.dreamText) return;
   dom.charCount.textContent = dom.dreamText.value.trim().length;
 }
 
@@ -635,7 +667,7 @@ async function loadDreamsFromSupabase() {
 
   replaceDreams((data || []).map(rowToDream));
   renderAll();
-  if (dom.searchText.value.trim()) {
+  if (dom.searchText?.value.trim()) {
     runSearch();
   }
 }
@@ -679,7 +711,8 @@ function replaceDreams(nextDreams) {
 }
 
 function renderSquareFilters() {
-  const filters = ['全部', ...state.emotions];
+  if (!dom.squareFilters) return;
+  const filters = ['全部', ...state.emotions, ...getStoredEmotions()];
   if (!filters.includes(state.squareFilter)) {
     state.squareFilter = '全部';
   }
@@ -690,7 +723,13 @@ function renderSquareFilters() {
   }).join('');
 }
 
+function getStoredEmotions() {
+  return [...new Set(dreams.map((dream) => dream.emotion).filter(Boolean))]
+    .filter((emotion) => !state.emotions.includes(emotion));
+}
+
 function renderSquare() {
+  if (!dom.squareList) return;
   const publicDreams = dreams.filter((dream) => dream.isPublic);
   const ownDreams = state.user
     ? dreams.filter((dream) => dream.userId === state.user.id)
@@ -743,6 +782,7 @@ function createDreamCard(dream, options = {}) {
 }
 
 function renderEmptySearch() {
+  if (!dom.resultBrief || !dom.searchResults) return;
   dom.resultBrief.textContent = '待检索';
   dom.searchResults.innerHTML = `
     <div class="empty-state">
@@ -755,11 +795,11 @@ function renderEmptySearch() {
 }
 
 function runSearch() {
+  if (!dom.searchText || !dom.resultBrief || !dom.searchResults) return;
   const query = dom.searchText.value.trim();
 
-  if (query.length < 4) {
-    dom.resultBrief.textContent = '线索过短';
-    dom.searchResults.innerHTML = '<div class="empty-state">场景还不够完整。</div>';
+  if (!query) {
+    renderEmptySearch();
     return;
   }
 
@@ -852,6 +892,7 @@ function renderSearchResults(results) {
 }
 
 function openDetail(dream, mode = 'square') {
+  if (!dom.modalMeta || !dom.modalText || !dom.modalFoot || !dom.detailModal) return;
   const meta = getEmotionMeta(dream.emotion);
   dom.modalMeta.innerHTML = `
     <span class="emotion-badge"><i class="${meta.icon}"></i>${escapeHtml(dream.emotion)}</span>
@@ -864,6 +905,7 @@ function openDetail(dream, mode = 'square') {
 }
 
 function closeDetail() {
+  if (!dom.detailModal) return;
   dom.detailModal.classList.remove('open');
   dom.detailModal.setAttribute('aria-hidden', 'true');
 }
@@ -885,6 +927,7 @@ function getEmailName(email = '') {
 }
 
 function showToast(message) {
+  if (!dom.toast) return;
   dom.toast.innerHTML = `<i class="fa-solid fa-circle-check"></i>${escapeHtml(message)}`;
   dom.toast.classList.add('show');
   window.clearTimeout(showToast.timer);
@@ -915,7 +958,9 @@ function escapeHtml(text) {
 
 function startLofiBackground() {
   const canvas = document.querySelector('#lofiCanvas');
+  if (!canvas) return;
   const ctx = canvas.getContext('2d');
+  if (!ctx) return;
   let width = 0;
   let height = 0;
   let dpr = 1;

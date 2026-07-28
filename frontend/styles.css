@@ -147,37 +147,6 @@
       transform: translateX(14%) rotate(8deg);
     }
 
-    .brand {
-      position: relative;
-      z-index: 1;
-      display: inline-flex;
-      align-items: center;
-      gap: 10px;
-      width: fit-content;
-      border: 0;
-      background: transparent;
-      color: var(--paper);
-      cursor: pointer;
-    }
-
-    .brand-mark {
-      display: grid;
-      place-items: center;
-      width: 32px;
-      height: 32px;
-      border: 1px solid rgba(255, 255, 255, 0.5);
-      border-radius: 999px;
-      color: var(--fog);
-      background: rgba(255, 255, 255, 0.34);
-    }
-
-    .brand-text {
-      font-family: var(--font-main);
-      font-size: 17px;
-      font-weight: 700;
-      letter-spacing: 0;
-    }
-
     .nav {
       position: relative;
       z-index: 1;
@@ -226,6 +195,7 @@
       background: transparent;
       color: rgba(41, 38, 32, 0.52);
       border-radius: 999px;
+      text-decoration: none;
       font-size: 13px;
       font-weight: 700;
       cursor: pointer;
@@ -241,7 +211,6 @@
       color: var(--paper);
     }
 
-    .history-button,
     .icon-button,
     .primary-button,
     .ghost-button {
@@ -259,7 +228,6 @@
       transition: transform 180ms ease, border-color 180ms ease, background 180ms ease, color 180ms ease, opacity 180ms ease, box-shadow 180ms ease;
     }
 
-    .history-button::before,
     .icon-button::before,
     .primary-button::before,
     .ghost-button::before {
@@ -273,7 +241,6 @@
       pointer-events: none;
     }
 
-    .history-button:hover::before,
     .icon-button:hover::before,
     .primary-button:hover::before,
     .ghost-button:hover::before {
@@ -281,18 +248,6 @@
       transform: translateX(38%) rotate(8deg);
     }
 
-    .history-button {
-      justify-self: end;
-      min-height: 38px;
-      border: 1px solid var(--line);
-      background: rgba(255, 255, 255, 0.36);
-      color: var(--muted);
-      padding: 0 13px;
-      font-size: 13px;
-      font-weight: 700;
-    }
-
-    .history-button:hover,
     .icon-button:hover,
     .ghost-button:hover {
       border-color: var(--line-strong);
@@ -784,7 +739,8 @@
     .emotion-list {
       display: grid;
       gap: 4px;
-      max-height: 176px;
+      height: 156px;
+      max-height: 156px;
       overflow: auto;
       padding-right: 2px;
     }
@@ -802,6 +758,10 @@
       opacity: 1;
       pointer-events: auto;
       transform: translateY(0) scale(1);
+    }
+
+    .emotion-menu:not(.expanded) .emotion-item.is-extra {
+      display: none;
     }
 
     .emotion-item {
@@ -837,48 +797,40 @@
       color: var(--paper);
     }
 
+    .emotion-more-button,
     .custom-tag-row {
-      display: grid;
-      grid-template-columns: minmax(0, 1fr) 36px;
-      gap: 6px;
-      border-top: 1px solid rgba(41, 38, 32, 0.08);
-      padding-top: 7px;
-    }
-
-    .custom-tag-input {
-      min-width: 0;
-      height: 36px;
-      border: 1px solid rgba(41, 38, 32, 0.11);
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      min-height: 34px;
+      width: 100%;
+      border: 1px solid rgba(41, 38, 32, 0.1);
       border-radius: 999px;
-      background: rgba(255, 255, 255, 0.42);
-      color: var(--paper);
-      outline: none;
-      padding: 0 12px;
-      font-size: 13px;
+      background: rgba(255, 255, 255, 0.32);
+      color: var(--quiet);
+      padding: 0 10px;
+      font-size: 12px;
+      font-weight: 700;
     }
 
-    .custom-tag-input:focus {
-      border-color: rgba(41, 38, 32, 0.24);
-      background: rgba(255, 255, 255, 0.58);
-    }
-
-    .custom-tag-button {
-      display: inline-grid;
-      place-items: center;
-      width: 36px;
-      height: 36px;
-      border: 1px solid rgba(255,255,255,0.58);
-      border-radius: 999px;
-      background: rgba(255, 255, 255, 0.46);
-      color: var(--fog);
+    .emotion-more-button {
+      justify-content: center;
       cursor: pointer;
-      transition: transform 160ms ease, background 160ms ease, color 160ms ease;
+      transition: transform 160ms ease, border-color 160ms ease, background 160ms ease, color 160ms ease;
     }
 
-    .custom-tag-button:hover {
+    .emotion-more-button:hover {
       transform: translateY(-1px);
-      background: rgba(255, 255, 255, 0.68);
+      border-color: var(--line-strong);
+      background: rgba(255, 255, 255, 0.52);
       color: var(--paper);
+    }
+
+    .custom-tag-row {
+      justify-content: flex-start;
+      border-style: dashed;
+      cursor: not-allowed;
+      opacity: 0.76;
     }
 
     .switch {
@@ -1201,66 +1153,6 @@
       -webkit-line-clamp: 5;
     }
 
-    .drawer-backdrop {
-      position: fixed;
-      inset: 0;
-      z-index: 70;
-      display: none;
-      background: rgba(58, 48, 35, 0.16);
-      backdrop-filter: blur(6px);
-    }
-
-    .drawer-backdrop.open {
-      display: block;
-    }
-
-    .drawer {
-      position: fixed;
-      top: 0;
-      right: 0;
-      z-index: 80;
-      width: min(410px, calc(100vw - 20px));
-      height: 100vh;
-      height: var(--viewport-height);
-      border-left: 1px solid var(--line);
-      background: rgba(255, 252, 245, 0.72);
-      backdrop-filter: blur(28px);
-      transform: translateX(105%);
-      transition: transform 300ms cubic-bezier(.22,.8,.22,1);
-      padding: 18px;
-      box-shadow: -28px 0 80px rgba(91, 75, 56, 0.16);
-    }
-
-    .drawer.open {
-      transform: translateX(0);
-    }
-
-    .drawer-head {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 12px;
-      margin-bottom: 14px;
-    }
-
-    .history-list {
-      display: grid;
-      gap: 10px;
-      max-height: calc(100vh - 88px);
-      max-height: calc(var(--viewport-height) - 88px);
-      overflow: auto;
-      padding-right: 3px;
-    }
-
-    .history-list::-webkit-scrollbar {
-      width: 8px;
-    }
-
-    .history-list::-webkit-scrollbar-thumb {
-      background: rgba(41, 38, 32, 0.16);
-      border-radius: 999px;
-    }
-
     .modal {
       position: fixed;
       inset: 0;
@@ -1512,8 +1404,7 @@
         font-size: 14px;
       }
 
-      .nav-button span,
-      .history-button span {
+      .nav-button span {
         display: none;
       }
 
