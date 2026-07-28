@@ -1484,14 +1484,15 @@
       .topbar {
         position: fixed;
         top: max(8px, env(safe-area-inset-top));
-        left: 50%;
+        right: auto;
+        left: calc(50vw - min(35vw, 136px));
         width: min(70vw, 272px);
         margin: 0;
-        transform: translateX(-50%);
+        transform: none;
       }
 
       .topbar:hover {
-        transform: translateX(-50%) translateY(-1px);
+        transform: translateY(-1px);
       }
 
       .nav {
@@ -1533,13 +1534,16 @@
       }
 
       #journalView.view.active {
-        padding-top: clamp(56px, 9vh, 66px);
-        padding-top: clamp(56px, 9dvh, 66px);
+        min-height: calc(var(--viewport-height) - max(20px, env(safe-area-inset-top)) - max(10px, env(safe-area-inset-bottom)));
+        align-items: center;
+        padding-top: clamp(64px, 10vh, 78px);
+        padding-top: clamp(64px, 10dvh, 78px);
+        padding-bottom: max(18px, env(safe-area-inset-bottom));
       }
 
       .journal-wrap {
-        gap: clamp(8px, 1.8vh, 12px);
-        gap: clamp(8px, 1.8dvh, 12px);
+        gap: clamp(10px, 2.2vh, 16px);
+        gap: clamp(10px, 2.2dvh, 16px);
       }
 
       .journal-heading {
@@ -1576,7 +1580,12 @@
         background-size: 14px 10px, 14px 10px;
       }
 
+      .journal-card {
+        display: block;
+      }
+
       .dream-input {
+        flex: none;
         min-height: clamp(170px, 40vh, 260px);
         min-height: clamp(170px, 40dvh, 260px);
         padding: 20px 15px 14px;
@@ -1701,6 +1710,7 @@
       }
 
       .topbar {
+        left: calc(50vw - min(34vw, 130px));
         width: min(68vw, 260px);
       }
 
@@ -1709,11 +1719,12 @@
       }
 
       #journalView.view.active {
-        padding-top: 50px;
+        padding-top: clamp(54px, 8.5vh, 62px);
+        padding-top: clamp(54px, 8.5dvh, 62px);
       }
 
       .journal-wrap {
-        gap: 7px;
+        gap: 8px;
       }
 
       .quiet-title {
