@@ -38,7 +38,7 @@ window.DEJAVU_SUPABASE_ANON_KEY = '你的 anon public key';
 
 不要把 `service_role key` 放进前端。
 
-数据库脚本只需要在 Supabase SQL Editor 里执行一次；网站每次打开时只会读取/写入已有表，不会自动建表。`profiles` 表保存用户邮箱和公开 ID，`dreams.author` 只保存可公开展示的匿名 ID，避免大厅卡片暴露邮箱。
+数据库脚本只需要在 Supabase SQL Editor 里执行一次；网站每次打开时只会读取/写入已有表，不会自动建表。Supabase 的 `auth.users` 管登录身份；`public.profiles` 保存可公开展示的 `user_id`、公开 ID、昵称、头像和签名；`public.user_accounts` 私有保存注册/登录时记录的邮箱；梦境展示会通过 `dreams.user_id` 关联公开资料，避免大厅卡片暴露邮箱。
 
 ## Auth 回调地址
 

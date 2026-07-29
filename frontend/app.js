@@ -1,5 +1,3 @@
-import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
-
 const MOCK_DREAMS = [
   {
     id: 'seed-1',
@@ -50,16 +48,21 @@ const MOCK_DREAMS = [
 
 const MIN_DREAM_LENGTH = 5;
 const VISIBLE_EMOTION_LIMIT = 4;
+const PROFILE_HANDLE_PATTERN = /^[a-z0-9_]{3,18}$/;
+const PROFILE_AVATAR_MAX_BYTES = 3 * 1024 * 1024;
+const PROFILE_AVATAR_SIZE = 320;
 const BASE_EMOTIONS = ['喜悦', '焦虑', '诡异', '科幻', '平静', '怀旧', '迷失', '浪漫', '荒诞', '清醒'];
 const ROUTES = {
   journal: '/',
   search: '/search/',
-  square: '/square/'
+  square: '/square/',
+  profile: '/profile/'
 };
 const ROUTE_TITLES = {
   journal: 'Déjà vu',
   search: 'Déjà vu · 检索',
-  square: 'Déjà vu · 大厅'
+  square: 'Déjà vu · 大厅',
+  profile: 'Déjà vu · 个人资料'
 };
 const pageCache = new Map();
 let routeRequestId = 0;
@@ -82,18 +85,9 @@ const HAS_SUPABASE_CONFIG = Boolean(
     && !SUPABASE_ANON_KEY.includes('your-anon-key')
 );
 
-const supabase = HAS_SUPABASE_CONFIG
-  ? createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-      auth: {
-        persistSession: true,
-        autoRefreshToken: true,
-        detectSessionInUrl: true,
-        flowType: 'pkce'
-      }
-    })
-  : null;
+let supabase = null;
 
-const dreams = [...MOCK_DREAMS];
+const dreams = HAS_SUPABASE_CONFIG ? [] : [...MOCK_DREAMS];
 
 const state = {
   activeView: getInitialView(),
@@ -107,7 +101,10 @@ const state = {
   pendingAuthEmail: '',
   nextOtpSendAt: 0,
   isLoadingDreams: false,
-  profile: null
+  dreamLoadError: '',
+  authClientError: '',
+  profile: null,
+  accountEmail: ''
 };
 
 const emotionMeta = {
@@ -168,7 +165,23 @@ const dom = {
   authBackButton: document.querySelector('#authBackButton'),
   authMessage: document.querySelector('#authMessage'),
   authUser: document.querySelector('#authUser'),
-  signOutButton: document.querySelector('#signOutButton')
+  signOutButton: document.querySelector('#signOutButton'),
+  profileForm: document.querySelector('#profileForm'),
+  profileHandle: document.querySelector('#profileHandle'),
+  profileDisplayName: document.querySelector('#profileDisplayName'),
+  profileSignature: document.querySelector('#profileSignature'),
+  profileEmail: document.querySelector('#profileEmail'),
+  profileAvatarInput: document.querySelector('#profileAvatarInput'),
+  profileAvatarPreview: document.querySelector('#profileAvatarPreview'),
+  profilePreviewName: document.querySelector('#profilePreviewName'),
+  profilePreviewHandle: document.querySelector('#profilePreviewHandle'),
+  profilePreviewSignature: document.querySelector('#profilePreviewSignature'),
+  profileMessage: document.querySelector('#profileMessage'),
+  profileSaveButton: document.querySelector('#profileSaveButton'),
+  profileSignOutButton: document.querySelector('#profileSignOutButton'),
+  profileLoginButton: document.querySelector('#profileLoginButton'),
+  profileSignedInPanel: document.querySelector('#profileSignedInPanel'),
+  profileGuestPanel: document.querySelector('#profileGuestPanel')
 };
 
 function refreshDom() {
@@ -216,7 +229,23 @@ function refreshDom() {
     authBackButton: document.querySelector('#authBackButton'),
     authMessage: document.querySelector('#authMessage'),
     authUser: document.querySelector('#authUser'),
-    signOutButton: document.querySelector('#signOutButton')
+    signOutButton: document.querySelector('#signOutButton'),
+    profileForm: document.querySelector('#profileForm'),
+    profileHandle: document.querySelector('#profileHandle'),
+    profileDisplayName: document.querySelector('#profileDisplayName'),
+    profileSignature: document.querySelector('#profileSignature'),
+    profileEmail: document.querySelector('#profileEmail'),
+    profileAvatarInput: document.querySelector('#profileAvatarInput'),
+    profileAvatarPreview: document.querySelector('#profileAvatarPreview'),
+    profilePreviewName: document.querySelector('#profilePreviewName'),
+    profilePreviewHandle: document.querySelector('#profilePreviewHandle'),
+    profilePreviewSignature: document.querySelector('#profilePreviewSignature'),
+    profileMessage: document.querySelector('#profileMessage'),
+    profileSaveButton: document.querySelector('#profileSaveButton'),
+    profileSignOutButton: document.querySelector('#profileSignOutButton'),
+    profileLoginButton: document.querySelector('#profileLoginButton'),
+    profileSignedInPanel: document.querySelector('#profileSignedInPanel'),
+    profileGuestPanel: document.querySelector('#profileGuestPanel')
   });
 }
 
@@ -247,8 +276,17 @@ async function init() {
   startLofiBackground();
   renderAuthState();
 
-  if (!supabase) {
+  if (!HAS_SUPABASE_CONFIG) {
     openAuthModal();
+    return;
+  }
+
+  const initialDreamsLoad = loadDreamsFromSupabase();
+  await initSupabaseClient();
+
+  if (!supabase) {
+    await initialDreamsLoad;
+    renderAuthState();
     return;
   }
 
@@ -260,13 +298,39 @@ async function init() {
 
   setSession(data?.session || null);
   await ensureCurrentProfile();
-  await loadDreamsFromSupabase();
+  await initialDreamsLoad;
+  if (state.user) {
+    await loadDreamsFromSupabase();
+  }
 
   supabase.auth.onAuthStateChange(async (_event, session) => {
     setSession(session);
     await ensureCurrentProfile();
     await loadDreamsFromSupabase();
   });
+}
+
+async function initSupabaseClient() {
+  if (!HAS_SUPABASE_CONFIG || supabase) return supabase;
+
+  try {
+    const { createClient } = await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm');
+    supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+      auth: {
+        persistSession: true,
+        autoRefreshToken: true,
+        detectSessionInUrl: true,
+        flowType: 'pkce'
+      }
+    });
+    state.authClientError = '';
+  } catch (error) {
+    console.warn('Supabase SDK load failed:', error);
+    state.authClientError = '登录模块加载失败，但大厅仍会读取公开梦。';
+    showToast('登录模块加载失败');
+  }
+
+  return supabase;
 }
 
 function bindEvents() {
@@ -293,7 +357,7 @@ function bindEvents() {
     if (event.target === dom.detailModal) closeDetail();
   });
 
-  dom.accountButton?.addEventListener('click', openAuthModal);
+  dom.accountButton?.addEventListener('click', handleAccountButtonClick);
   dom.authClose?.addEventListener('click', closeAuthModal);
   dom.authModal?.addEventListener('click', (event) => {
     if (event.target === dom.authModal) closeAuthModal();
@@ -361,6 +425,14 @@ function bindPageEvents() {
     });
     renderSquare();
   });
+
+  dom.profileForm?.addEventListener('submit', handleProfileSubmit);
+  dom.profileAvatarInput?.addEventListener('change', handleAvatarInputChange);
+  dom.profileHandle?.addEventListener('input', updateProfilePreviewFromForm);
+  dom.profileDisplayName?.addEventListener('input', updateProfilePreviewFromForm);
+  dom.profileSignature?.addEventListener('input', updateProfilePreviewFromForm);
+  dom.profileSignOutButton?.addEventListener('click', signOut);
+  dom.profileLoginButton?.addEventListener('click', openAuthModal);
 }
 
 function setView(viewName) {
@@ -386,6 +458,7 @@ function getInitialView() {
   const path = window.location.pathname.toLowerCase().replace(/\/+$/, '') || '/';
   if (path.endsWith('/search')) return 'search';
   if (path.endsWith('/square')) return 'square';
+  if (path.endsWith('/profile')) return 'profile';
   return 'journal';
 }
 
@@ -506,6 +579,11 @@ function renderCurrentPage() {
   if (state.activeView === 'square') {
     renderSquareFilters();
     renderSquare();
+    return;
+  }
+
+  if (state.activeView === 'profile') {
+    renderProfilePage();
   }
 }
 
@@ -541,27 +619,52 @@ function restoreCurrentViewState() {
   }
 }
 
+function handleAccountButtonClick() {
+  if (!state.user) {
+    openAuthModal();
+    return;
+  }
+
+  navigateTo('profile');
+}
+
 function setSession(session) {
   state.session = session;
   state.user = session?.user || null;
   state.profile = null;
+  state.accountEmail = '';
   renderAuthState();
 }
 
 function renderAuthState() {
   const signedIn = Boolean(state.user);
+  const accountName = signedIn
+    ? (getCurrentDisplayName() || formatPublicHandle(getCurrentPublicHandle()))
+    : (HAS_SUPABASE_CONFIG ? '登录' : '配置');
+  const accountAvatar = signedIn ? getCurrentAvatarUrl() : '';
 
   if (dom.accountLabel) {
-    dom.accountLabel.textContent = signedIn ? formatPublicHandle(getCurrentPublicHandle()) : (HAS_SUPABASE_CONFIG ? '登录' : '配置');
+    dom.accountLabel.textContent = accountName;
   }
-  dom.accountButton?.querySelector('i')?.setAttribute('class', signedIn ? 'fa-regular fa-circle-check' : 'fa-regular fa-user');
+
+  const accountIcon = dom.accountButton?.querySelector('i');
+  if (accountIcon) {
+    if (accountAvatar) {
+      accountIcon.className = 'account-bubble-avatar';
+      renderAvatarElement(accountIcon, accountAvatar, accountName);
+    } else {
+      accountIcon.removeAttribute('style');
+      accountIcon.className = signedIn ? 'fa-regular fa-circle-check' : 'fa-regular fa-user';
+      accountIcon.textContent = '';
+    }
+  }
 
   dom.authSetupPanel?.classList.toggle('hidden', HAS_SUPABASE_CONFIG);
   dom.authLoginPanel?.classList.toggle('hidden', !HAS_SUPABASE_CONFIG || signedIn);
   dom.authSignedInPanel?.classList.toggle('hidden', !HAS_SUPABASE_CONFIG || !signedIn);
 
   if (signedIn && dom.authUser) {
-    dom.authUser.textContent = formatPublicHandle(getCurrentPublicHandle());
+    dom.authUser.textContent = accountName;
   }
 }
 
@@ -573,43 +676,332 @@ async function ensureCurrentProfile() {
   }
 
   const fallbackHandle = generatePublicHandle(state.user.id || state.user.email);
-  const profileRow = {
-    user_id: state.user.id,
-    email: state.user.email || '',
-    public_handle: fallbackHandle,
-    updated_at: new Date().toISOString()
-  };
-
-  const { data, error } = await supabase
+  const { data: existingProfile, error: readError } = await supabase
     .from('profiles')
-    .upsert(profileRow, { onConflict: 'user_id' })
-    .select('user_id,email,public_handle')
-    .single();
+    .select('user_id,public_handle,display_name,avatar_url,signature')
+    .eq('user_id', state.user.id)
+    .maybeSingle();
 
-  if (error) {
-    console.warn('Profile sync failed:', error);
-    state.profile = {
-      userId: state.user.id,
-      publicHandle: fallbackHandle
-    };
+  if (readError) {
+    console.warn('Profile read failed:', readError);
+    state.profile = createFallbackProfile(fallbackHandle);
     renderAuthState();
+    renderProfilePage();
     return state.profile;
   }
 
-  state.profile = {
-    userId: data.user_id,
-    publicHandle: data.public_handle || fallbackHandle
-  };
+  if (existingProfile) {
+    state.profile = rowToProfile(existingProfile, fallbackHandle);
+    await ensureCurrentAccountEmail();
+    renderAuthState();
+    renderProfilePage();
+
+    return state.profile;
+  }
+
+  const { data, error } = await supabase
+    .from('profiles')
+    .insert({
+      user_id: state.user.id,
+      public_handle: fallbackHandle
+    })
+    .select('user_id,public_handle,display_name,avatar_url,signature')
+    .single();
+
+  if (error) {
+    console.warn('Profile create failed:', error);
+    state.profile = createFallbackProfile(fallbackHandle);
+    renderAuthState();
+    renderProfilePage();
+    return state.profile;
+  }
+
+  state.profile = rowToProfile(data, fallbackHandle);
+  await ensureCurrentAccountEmail();
   renderAuthState();
+  renderProfilePage();
   return state.profile;
+}
+
+async function ensureCurrentAccountEmail() {
+  const email = getCurrentAuthEmail();
+  if (!supabase || !state.user || !email) return;
+
+  const { data: existingAccount, error: readError } = await supabase
+    .from('user_accounts')
+    .select('user_id,email')
+    .eq('user_id', state.user.id)
+    .maybeSingle();
+
+  if (readError) {
+    console.warn('User account read failed:', readError);
+    state.accountEmail = email;
+    return;
+  }
+
+  if (existingAccount) {
+    state.accountEmail = existingAccount.email || email;
+    return;
+  }
+
+  const { error } = await supabase
+    .from('user_accounts')
+    .insert({
+      user_id: state.user.id,
+      email
+    });
+
+  if (error) {
+    console.warn('User account create failed:', error);
+    return;
+  }
+
+  state.accountEmail = email;
+}
+
+function rowToProfile(row, fallbackHandle) {
+  return {
+    userId: row?.user_id || state.user?.id || '',
+    publicHandle: normalizeProfileHandle(row?.public_handle) || normalizeProfileHandle(fallbackHandle),
+    displayName: String(row?.display_name || '').trim(),
+    avatarUrl: getSafeAvatarUrl(row?.avatar_url),
+    signature: String(row?.signature || '').trim()
+  };
+}
+
+function createFallbackProfile(publicHandle) {
+  return {
+    userId: state.user?.id || '',
+    publicHandle: normalizeProfileHandle(publicHandle),
+    displayName: '',
+    avatarUrl: '',
+    signature: ''
+  };
+}
+
+function renderProfilePage() {
+  if (!dom.profileSignedInPanel && !dom.profileGuestPanel) return;
+
+  const signedIn = Boolean(state.user);
+  dom.profileSignedInPanel?.classList.toggle('hidden', !signedIn);
+  dom.profileGuestPanel?.classList.toggle('hidden', signedIn);
+
+  if (!signedIn) {
+    setProfileMessage('');
+    return;
+  }
+
+  const fallbackProfile = createFallbackProfile(generatePublicHandle(state.user.id || state.user.email));
+  const profile = state.profile || fallbackProfile;
+  const publicHandle = normalizeProfileHandle(profile.publicHandle || fallbackProfile.publicHandle);
+  const displayName = String(profile.displayName || '').trim();
+  const signature = String(profile.signature || '').trim();
+  const accountName = displayName || '未命名';
+
+  if (dom.profileHandle) dom.profileHandle.value = publicHandle;
+  if (dom.profileDisplayName) dom.profileDisplayName.value = displayName;
+  if (dom.profileSignature) dom.profileSignature.value = signature;
+  if (dom.profileEmail) dom.profileEmail.value = getCurrentAuthEmail() || '未绑定';
+
+  renderAvatarElement(dom.profileAvatarPreview, getSafeAvatarUrl(profile.avatarUrl), getProfileInitial(accountName || publicHandle));
+  if (dom.profilePreviewName) dom.profilePreviewName.textContent = accountName;
+  if (dom.profilePreviewHandle) dom.profilePreviewHandle.textContent = formatPublicHandle(publicHandle);
+  if (dom.profilePreviewSignature) {
+    dom.profilePreviewSignature.textContent = signature || '还没有签名';
+  }
+}
+
+function updateProfilePreviewFromForm() {
+  if (!dom.profileSignedInPanel || !state.user) return;
+
+  const publicHandle = normalizeProfileHandle(dom.profileHandle?.value || getCurrentPublicHandle());
+  const displayName = String(dom.profileDisplayName?.value || '').trim();
+  const signature = String(dom.profileSignature?.value || '').trim();
+  const accountName = displayName || '未命名';
+
+  if (dom.profilePreviewName) dom.profilePreviewName.textContent = accountName;
+  if (dom.profilePreviewHandle) dom.profilePreviewHandle.textContent = formatPublicHandle(publicHandle || getCurrentPublicHandle());
+  if (dom.profilePreviewSignature) dom.profilePreviewSignature.textContent = signature || '还没有签名';
+  renderAvatarElement(dom.profileAvatarPreview, state.profile?.avatarUrl, getProfileInitial(accountName || publicHandle));
+}
+
+async function handleProfileSubmit(event) {
+  event.preventDefault();
+
+  if (!supabase) {
+    openAuthModal();
+    setProfileMessage('先在 frontend/config.js 填入 Supabase 配置。', true);
+    return;
+  }
+
+  if (!state.user) {
+    openAuthModal();
+    showToast('登录后编辑资料');
+    return;
+  }
+
+  const publicHandle = normalizeProfileHandle(dom.profileHandle?.value);
+  const displayName = String(dom.profileDisplayName?.value || '').trim().slice(0, 24);
+  const signature = String(dom.profileSignature?.value || '').trim().slice(0, 80);
+  const avatarUrl = getSafeAvatarUrl(state.profile?.avatarUrl);
+
+  if (!PROFILE_HANDLE_PATTERN.test(publicHandle)) {
+    setProfileMessage('ID 需要是 3-18 位小写英文、数字或下划线。', true);
+    dom.profileHandle?.focus();
+    return;
+  }
+
+  dom.profileSaveButton.disabled = true;
+  setProfileMessage('正在保存...');
+
+  try {
+    const isDuplicated = await isProfileHandleDuplicated(publicHandle);
+    if (isDuplicated) {
+      setProfileMessage('这个 ID 已经被使用了，换一个吧。', true);
+      dom.profileHandle?.focus();
+      return;
+    }
+
+    const { data, error } = await supabase
+      .from('profiles')
+      .update({
+        public_handle: publicHandle,
+        display_name: displayName || null,
+        avatar_url: avatarUrl || null,
+        signature: signature || null,
+        updated_at: new Date().toISOString()
+      })
+      .eq('user_id', state.user.id)
+      .select('user_id,public_handle,display_name,avatar_url,signature')
+      .single();
+
+    if (error) throw error;
+
+    state.profile = rowToProfile(data, publicHandle);
+    dreams.forEach((dream) => {
+      if (dream.userId === state.user.id) {
+        dream.publicHandle = state.profile.publicHandle;
+        dream.displayName = state.profile.displayName;
+        dream.avatarUrl = state.profile.avatarUrl;
+      }
+    });
+
+    renderAuthState();
+    renderProfilePage();
+    renderAll();
+    setProfileMessage('已保存');
+    showToast('资料已更新');
+  } catch (error) {
+    console.warn('Profile save failed:', error);
+    setProfileMessage(
+      isUniqueHandleError(error) ? '这个 ID 已经被使用了，换一个吧。' : '保存失败，请检查数据库迁移是否已执行。',
+      true
+    );
+  } finally {
+    dom.profileSaveButton.disabled = false;
+  }
+}
+
+async function isProfileHandleDuplicated(publicHandle) {
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('user_id')
+    .eq('public_handle', publicHandle)
+    .neq('user_id', state.user.id)
+    .maybeSingle();
+
+  if (error) throw error;
+  return Boolean(data);
+}
+
+async function handleAvatarInputChange(event) {
+  const file = event.target.files?.[0];
+  if (!file) return;
+
+  if (!file.type.startsWith('image/')) {
+    setProfileMessage('请选择图片文件。', true);
+    event.target.value = '';
+    return;
+  }
+
+  if (file.size > PROFILE_AVATAR_MAX_BYTES) {
+    setProfileMessage('头像图片不能超过 3MB。', true);
+    event.target.value = '';
+    return;
+  }
+
+  try {
+    const avatarUrl = await createAvatarDataUrl(file);
+    state.profile = {
+      ...(state.profile || createFallbackProfile(generatePublicHandle(state.user?.id || state.user?.email))),
+      avatarUrl
+    };
+    renderAvatarElement(dom.profileAvatarPreview, avatarUrl, getProfileInitial(getCurrentDisplayName() || getCurrentPublicHandle()));
+    setProfileMessage('头像已预览，保存后生效。');
+  } catch (error) {
+    console.warn('Avatar preview failed:', error);
+    setProfileMessage('头像读取失败，请换一张图片。', true);
+  } finally {
+    event.target.value = '';
+  }
+}
+
+async function createAvatarDataUrl(file) {
+  const sourceUrl = await readFileAsDataUrl(file);
+  const image = await loadImage(sourceUrl);
+  const canvas = document.createElement('canvas');
+  const size = PROFILE_AVATAR_SIZE;
+  canvas.width = size;
+  canvas.height = size;
+  const context = canvas.getContext('2d');
+  if (!context) {
+    throw new Error('Canvas context unavailable');
+  }
+  const side = Math.min(image.width, image.height);
+  const sx = Math.max(0, (image.width - side) / 2);
+  const sy = Math.max(0, (image.height - side) / 2);
+  context.drawImage(image, sx, sy, side, side, 0, 0, size, size);
+  return canvas.toDataURL('image/jpeg', 0.86);
+}
+
+function readFileAsDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.addEventListener('load', () => resolve(String(reader.result || '')));
+    reader.addEventListener('error', reject);
+    reader.readAsDataURL(file);
+  });
+}
+
+function loadImage(sourceUrl) {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.addEventListener('load', () => resolve(image));
+    image.addEventListener('error', reject);
+    image.src = sourceUrl;
+  });
+}
+
+function setProfileMessage(message, isError = false) {
+  if (!dom.profileMessage) return;
+  dom.profileMessage.textContent = message;
+  dom.profileMessage.classList.toggle('error', isError);
+}
+
+function isUniqueHandleError(error) {
+  const message = getErrorMessage(error);
+  return /duplicate|unique|23505|profiles_public_handle/i.test(message);
 }
 
 async function handleAuthSubmit(event) {
   event.preventDefault();
 
   if (!supabase) {
-    setAuthMessage('先在 frontend/config.js 填入 Supabase 配置。', true);
-    return;
+    await initSupabaseClient();
+    if (!supabase) {
+      setAuthMessage(HAS_SUPABASE_CONFIG ? '登录模块加载失败，请稍后重试。' : '先在 frontend/config.js 填入 Supabase 配置。', true);
+      return;
+    }
   }
 
   const email = dom.authEmail.value.trim();
@@ -717,6 +1109,9 @@ async function signOut() {
   resetAuthForm();
   closeAuthModal();
   showToast('已退出');
+  if (state.activeView === 'profile') {
+    navigateTo('journal');
+  }
 }
 
 function formatAuthError(error, action) {
@@ -777,6 +1172,12 @@ function openAuthModal() {
   if (!dom.authModal) return;
   dom.authModal.classList.add('open');
   dom.authModal.setAttribute('aria-hidden', 'false');
+  if (state.authClientError) {
+    setAuthMessage(state.authClientError, true);
+    initSupabaseClient().then(() => {
+      if (!state.authClientError) setAuthMessage('');
+    });
+  }
 }
 
 function closeAuthModal() {
@@ -934,28 +1335,135 @@ function renderAll() {
 }
 
 async function loadDreamsFromSupabase() {
-  if (!supabase || state.isLoadingDreams) return;
+  if (!HAS_SUPABASE_CONFIG || state.isLoadingDreams) return;
 
   state.isLoadingDreams = true;
+  state.dreamLoadError = '';
+  renderSquare();
+
+  let rows = null;
+  try {
+    rows = await fetchDreamRows();
+  } catch (error) {
+    console.warn('Dreams read failed:', error);
+    state.dreamLoadError = getErrorMessage(error) || '数据库读取失败';
+    showToast('读取失败，请检查网络或 RLS 策略');
+  } finally {
+    state.isLoadingDreams = false;
+  }
+
+  if (!rows) {
+    replaceDreams([]);
+    renderAll();
+    return;
+  }
+
+  replaceDreams(rows.map((row) => rowToDream(row)));
+  renderAll();
+  if (dom.searchText?.value.trim()) {
+    runSearch();
+  }
+
+  hydrateDreamProfiles(rows);
+}
+
+async function fetchDreamRows() {
+  const publicRows = await fetchDreamRowsViaRest();
+
+  if (!state.user || !supabase) {
+    return publicRows;
+  }
+
   const { data, error } = await supabase
     .from('dreams')
     .select('id,text,emotion,is_public,author,created_at,user_id')
     .order('created_at', { ascending: false })
     .limit(120);
 
-  state.isLoadingDreams = false;
+  if (!error && (data || []).length) {
+    return mergeDreamRows(publicRows, data || []);
+  }
 
   if (error) {
-    console.warn(error);
-    showToast('读取失败，请检查 RLS 策略');
-    return;
+    console.warn('Supabase client dream read failed:', error);
   }
 
-  replaceDreams((data || []).map(rowToDream));
-  renderAll();
-  if (dom.searchText?.value.trim()) {
-    runSearch();
+  return publicRows;
+}
+
+async function fetchDreamRowsViaRest() {
+  const params = new URLSearchParams({
+    select: 'id,text,emotion,is_public,author,created_at,user_id',
+    order: 'created_at.desc',
+    limit: '120'
+  });
+  const response = await fetch(`${SUPABASE_URL}/rest/v1/dreams?${params.toString()}`, {
+    headers: {
+      apikey: SUPABASE_ANON_KEY,
+      Authorization: `Bearer ${SUPABASE_ANON_KEY}`
+    }
+  });
+
+  if (!response.ok) {
+    throw new Error(`REST dream read failed: ${response.status}`);
   }
+
+  return response.json();
+}
+
+function mergeDreamRows(...rowGroups) {
+  const merged = new Map();
+  rowGroups.flat().forEach((row) => {
+    if (row?.id) {
+      merged.set(String(row.id), row);
+    }
+  });
+
+  return [...merged.values()].sort((a, b) => {
+    return parseDreamDate(b.created_at).getTime() - parseDreamDate(a.created_at).getTime();
+  });
+}
+
+async function hydrateDreamProfiles(rows) {
+  try {
+    const profileHandles = await loadProfileHandles(rows);
+    if (!profileHandles.size) return;
+
+    dreams.forEach((dream) => {
+      const profile = dream.userId ? profileHandles.get(dream.userId) : null;
+      if (!profile) return;
+      dream.publicHandle = profile.publicHandle || dream.publicHandle;
+      dream.displayName = profile.displayName || '';
+      dream.avatarUrl = profile.avatarUrl || '';
+    });
+    renderAll();
+  } catch (error) {
+    console.warn('Profile hydrate failed:', error);
+  }
+}
+
+async function loadProfileHandles(rows) {
+  const userIds = [...new Set(rows.map((row) => row.user_id).filter(Boolean))];
+  if (!supabase || !userIds.length) return new Map();
+
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('user_id,public_handle,display_name,avatar_url')
+    .in('user_id', userIds);
+
+  if (error) {
+    console.warn('Profile handles read failed:', error);
+    return new Map();
+  }
+
+  return new Map((data || []).map((profile) => [
+    profile.user_id,
+    {
+      publicHandle: profile.public_handle,
+      displayName: String(profile.display_name || '').trim(),
+      avatarUrl: getSafeAvatarUrl(profile.avatar_url)
+    }
+  ]));
 }
 
 async function saveDreamToSupabase(dream) {
@@ -967,7 +1475,6 @@ async function saveDreamToSupabase(dream) {
     text: dream.text,
     emotion: dream.emotion,
     is_public: dream.isPublic,
-    author: getCurrentPublicHandle(),
     user_id: state.user.id
   };
 
@@ -981,18 +1488,30 @@ async function saveDreamToSupabase(dream) {
     throw error;
   }
 
-  return rowToDream(data);
+  return rowToDream(data, new Map([[state.user.id, {
+    publicHandle: getCurrentPublicHandle(),
+    displayName: getCurrentDisplayName(),
+    avatarUrl: getCurrentAvatarUrl()
+  }]]));
 }
 
-function rowToDream(row) {
+function rowToDream(row, profileHandles = new Map()) {
+  const userId = row.user_id || null;
+  const profile = userId ? profileHandles.get(userId) : null;
+  const profileData = profile && typeof profile === 'object' ? profile : null;
+  const profileHandle = typeof profile === 'string' ? profile : profileData?.publicHandle;
+
   return {
     id: String(row.id),
     text: row.text,
     emotion: row.emotion || '喜悦',
     isPublic: Boolean(row.is_public),
-    author: normalizeDreamAuthor(row.author, row.user_id || row.id || row.created_at),
+    author: normalizeDreamAuthor(row.author, userId || row.id || row.created_at),
+    publicHandle: profileHandle || '',
+    displayName: profileData?.displayName || '',
+    avatarUrl: profileData?.avatarUrl || '',
     createdAt: String(row.created_at || '') || new Date().toISOString(),
-    userId: row.user_id || null
+    userId
   };
 }
 
@@ -1020,6 +1539,22 @@ function getStoredEmotions() {
 
 function renderSquare() {
   if (!dom.squareList) return;
+
+  if (state.isLoadingDreams && !dreams.length) {
+    dom.squareList.innerHTML = '<div class="empty-state" style="grid-column:1/-1;">正在读取梦境大厅...</div>';
+    return;
+  }
+
+  if (state.dreamLoadError && !dreams.length) {
+    dom.squareList.innerHTML = `
+      <div class="empty-state" style="grid-column:1/-1;">
+        数据库读取失败。<br>
+        <span class="text-xs text-stone-500">${escapeHtml(state.dreamLoadError)}</span>
+      </div>
+    `;
+    return;
+  }
+
   const publicDreams = dreams.filter((dream) => dream.isPublic);
   const ownDreams = state.user
     ? dreams.filter((dream) => dream.userId === state.user.id)
@@ -1054,7 +1589,7 @@ function createDreamCard(dream, options = {}) {
   const avatar = node.querySelector('.dream-avatar');
 
   badge.innerHTML = `<i class="${meta.icon}"></i>${escapeHtml(dream.emotion)}`;
-  avatar.textContent = profile.avatar;
+  renderAvatarElement(avatar, profile.avatarUrl, profile.avatar);
   avatar.style.setProperty('--avatar-hue', profile.hue);
   node.querySelector('.dream-author').textContent = profile.name;
   node.querySelector('.dream-handle').textContent = profile.handle;
@@ -1216,18 +1751,22 @@ function displayAuthor(dream, mode = 'square') {
 
 function getDreamProfile(dream, mode = 'square') {
   const isMine = state.user && dream.userId === state.user.id;
+  const ownDisplayName = getCurrentDisplayName();
+  const dreamDisplayName = String(dream.displayName || '').trim();
   const authorName = isMine
-    ? '我'
-    : (mode === 'square' || dream.isPublic ? 'Unknown number' : displayAuthor(dream, mode));
+    ? (ownDisplayName || '我')
+    : (dreamDisplayName || (mode === 'square' || dream.isPublic ? `匿名 ${getDreamNumber(dream)}` : displayAuthor(dream, mode)));
   const handleBase = isMine
-    ? getCurrentPublicHandle()
-    : getSafeAuthorHandle(dream);
+    ? (dream.publicHandle || getCurrentPublicHandle())
+    : (dream.publicHandle || getSafeAuthorHandle(dream));
   const handle = formatPublicHandle(handleBase);
+  const avatarUrl = isMine ? getCurrentAvatarUrl() : getSafeAvatarUrl(dream.avatarUrl);
 
   return {
     name: authorName,
     handle,
-    avatar: isMine ? '我' : getDreamInitial(authorName),
+    avatar: getProfileInitial(authorName || handle),
+    avatarUrl,
     hue: String(getHashNumber(`${dream.id}${dream.createdAt}`) % 360)
   };
 }
@@ -1255,6 +1794,18 @@ function getCurrentPublicHandle() {
   return state.profile?.publicHandle || generatePublicHandle(state.user?.id || state.user?.email || 'guest');
 }
 
+function getCurrentDisplayName() {
+  return String(state.profile?.displayName || '').trim();
+}
+
+function getCurrentAvatarUrl() {
+  return getSafeAvatarUrl(state.profile?.avatarUrl);
+}
+
+function getCurrentAuthEmail() {
+  return String(state.accountEmail || state.user?.email || state.pendingAuthEmail || '').trim();
+}
+
 function getSafeAuthorHandle(dream) {
   const author = String(dream.author || '').trim();
   if (author && !isAnonymousAuthor(author) && !isEmailLike(author)) {
@@ -1264,11 +1815,53 @@ function getSafeAuthorHandle(dream) {
 }
 
 function formatPublicHandle(handle) {
-  return `@${String(handle || 'unique00').replace(/^@/, '').replace(/\s+/g, '').slice(0, 18) || 'unique00'}`;
+  return `@${normalizeProfileHandle(handle || 'unique00').slice(0, 18) || 'unique00'}`;
+}
+
+function normalizeProfileHandle(handle) {
+  return String(handle || '')
+    .trim()
+    .replace(/^@+/, '')
+    .replace(/\s+/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9_]/g, '')
+    .slice(0, 18);
 }
 
 function generatePublicHandle(seed) {
-  return `unique${String((getHashNumber(seed) % 900000) + 100000).padStart(6, '0')}`;
+  const text = String(seed || '').trim().toLowerCase();
+  const uuidStem = text.replaceAll('-', '').match(/^[a-f0-9]{10,}/)?.[0].slice(0, 10);
+  if (uuidStem) return `unique${uuidStem}`;
+  return `unique${String((getHashNumber(text) % 900000) + 100000).padStart(6, '0')}`;
+}
+
+function getProfileInitial(name) {
+  const text = String(name || 'U').trim();
+  if (!text) return 'U';
+  return /[a-z0-9]/i.test(text[0]) ? text[0].toUpperCase() : text[0];
+}
+
+function getSafeAvatarUrl(value) {
+  const url = String(value || '').trim();
+  if (/^data:image\/(png|jpe?g|webp|gif);base64,/i.test(url)) return url;
+  if (/^https:\/\/[^\s"'<>]+$/i.test(url)) return url;
+  return '';
+}
+
+function renderAvatarElement(element, avatarUrl, fallbackText) {
+  if (!element) return;
+
+  const safeUrl = getSafeAvatarUrl(avatarUrl);
+  if (safeUrl) {
+    element.textContent = '';
+    element.classList.add('has-image');
+    element.style.backgroundImage = `url("${safeUrl.replace(/["\\]/g, '')}")`;
+    return;
+  }
+
+  element.classList.remove('has-image', 'account-bubble-avatar');
+  element.style.removeProperty('background-image');
+  element.textContent = getProfileInitial(fallbackText);
 }
 
 function getDreamNumber(dream) {

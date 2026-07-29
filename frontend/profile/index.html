@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Déjà vu · 检索</title>
+  <title>Déjà vu · 个人资料</title>
   <link rel="icon" href="/icon.svg" type="image/svg+xml" />
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
@@ -17,12 +17,12 @@
 
   <div class="app">
     <header class="topbar">
-      <nav id="mainNav" class="nav" data-active="search" aria-label="主菜单">
+      <nav id="mainNav" class="nav" data-active="profile" aria-label="主菜单">
         <div class="nav-indicator" aria-hidden="true"></div>
         <a class="nav-button" href="/" data-route="journal">
           <i class="fa-solid fa-pen-nib"></i><span>记录</span>
         </a>
-        <a class="nav-button active" href="/search/" data-route="search" aria-current="page">
+        <a class="nav-button" href="/search/" data-route="search">
           <i class="fa-solid fa-magnifying-glass"></i><span>检索</span>
         </a>
         <a class="nav-button" href="/square/" data-route="square">
@@ -32,32 +32,83 @@
     </header>
 
     <main>
-      <section id="searchView" class="view active" data-view="search">
-        <div class="search-layout">
-          <form id="searchForm" class="panel search-card" autocomplete="off">
-            <span class="section-label"><i class="fa-solid fa-wave-square"></i> Recall</span>
-            <h2 class="section-title">共鸣...</h2>
-            <p class="section-subtitle">回忆一下吧！看看有没有人跟你梦到的一样？</p>
-
-            <div class="mt-7">
-              <label class="field-head" for="searchText">
-                <span>现实场景</span>
-                <span id="resultBrief">待检索</span>
-              </label>
-              <textarea id="searchText" class="text-field scene-input" placeholder="雨后的巷子，红色售货机，熟悉的门。"></textarea>
-              <div class="quick-row">
-                <button class="quick-chip" type="button" data-query="雨后的街道，红色自动售货机，一只会发光的猫从霓虹灯下面经过。">雨夜</button>
-                <button class="quick-chip" type="button" data-query="地铁站没有尽头，广播念着我的名字，墙上全是小时候的照片。">地铁</button>
-                <button class="quick-chip" type="button" data-query="办公室漂浮在太空里，电脑屏幕像星图一样展开。">太空</button>
-              </div>
+      <section id="profileView" class="view profile-view active" data-view="profile">
+        <div class="profile-shell">
+          <div class="square-head profile-head">
+            <div>
+              <span class="section-label"><i class="fa-regular fa-user"></i> Account</span>
+              <h2 class="section-title">个人资料</h2>
             </div>
+          </div>
 
-            <button id="runSearch" class="primary-button mt-6 w-full" type="submit">
-              <i class="fa-solid fa-magnifying-glass"></i>检索
+          <div id="profileSignedInPanel" class="profile-layout">
+            <article class="panel profile-preview">
+              <span class="section-label"><i class="fa-regular fa-address-card"></i> Profile</span>
+              <div id="profileAvatarPreview" class="profile-avatar-preview" aria-hidden="true">D</div>
+              <h3 id="profilePreviewName" class="profile-preview-name">未命名</h3>
+              <p id="profilePreviewHandle" class="profile-preview-handle">@unique00</p>
+              <p id="profilePreviewSignature" class="profile-preview-signature">还没有签名</p>
+            </article>
+
+            <form id="profileForm" class="panel profile-card profile-form" autocomplete="off">
+              <div class="profile-grid">
+                <label class="profile-field" for="profileHandle">
+                  <span class="profile-label">ID</span>
+                  <input id="profileHandle" class="profile-input" type="text" maxlength="18" spellcheck="false" required />
+                  <span class="profile-hint">3-18 位小写英文、数字或下划线</span>
+                </label>
+
+                <label class="profile-field" for="profileDisplayName">
+                  <span class="profile-label">昵称</span>
+                  <input id="profileDisplayName" class="profile-input" type="text" maxlength="24" placeholder="未命名" />
+                  <span class="profile-hint">昵称可以重复</span>
+                </label>
+
+                <label class="profile-field full" for="profileEmail">
+                  <span class="profile-label">绑定邮箱</span>
+                  <input id="profileEmail" class="profile-input" type="email" disabled />
+                </label>
+
+                <label class="profile-field full" for="profileSignature">
+                  <span class="profile-label">签名</span>
+                  <textarea id="profileSignature" class="profile-input" maxlength="80" placeholder="写一句留给梦境大厅的话"></textarea>
+                </label>
+
+                <div class="profile-field full">
+                  <span class="profile-label">头像</span>
+                  <input id="profileAvatarInput" class="sr-only" type="file" accept="image/*" />
+                  <label class="avatar-upload" for="profileAvatarInput">
+                    <i class="fa-solid fa-arrow-up-from-bracket"></i>
+                    <span>上传头像</span>
+                  </label>
+                </div>
+              </div>
+
+              <div class="profile-actions">
+                <button id="profileSaveButton" class="primary-button" type="submit">
+                  <i class="fa-regular fa-floppy-disk"></i>
+                  <span>保存修改</span>
+                </button>
+                <button id="profileSignOutButton" class="danger-button" type="button">
+                  <i class="fa-solid fa-arrow-right-from-bracket"></i>
+                  <span>退出登录</span>
+                </button>
+              </div>
+
+              <p id="profileMessage" class="profile-message" role="status" aria-live="polite"></p>
+            </form>
+          </div>
+
+          <div id="profileGuestPanel" class="empty-state profile-empty hidden">
+            <div>
+              <i class="fa-regular fa-user mb-4 text-2xl text-stone-600"></i>
+              <div>登录后查看个人资料。</div>
+            </div>
+            <button id="profileLoginButton" class="primary-button" type="button">
+              <i class="fa-regular fa-envelope"></i>
+              <span>登录</span>
             </button>
-          </form>
-
-          <div id="searchResults" class="result-stack"></div>
+          </div>
         </div>
       </section>
     </main>
