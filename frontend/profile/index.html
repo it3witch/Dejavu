@@ -44,7 +44,8 @@
           <div id="profileSignedInPanel" class="profile-layout">
             <article class="panel profile-preview">
               <span class="section-label"><i class="fa-regular fa-address-card"></i> Profile</span>
-              <div id="profileAvatarPreview" class="profile-avatar-preview" aria-hidden="true">D</div>
+              <div id="profileAvatarPreview" class="profile-avatar-preview" role="button" tabindex="0" aria-label="更换头像">D</div>
+              <input id="profileAvatarInput" class="sr-only" type="file" accept="image/*" />
               <h3 id="profilePreviewName" class="profile-preview-name">未命名</h3>
               <p id="profilePreviewHandle" class="profile-preview-handle">@unique00</p>
               <p id="profilePreviewSignature" class="profile-preview-signature">还没有签名</p>
@@ -74,14 +75,6 @@
                   <textarea id="profileSignature" class="profile-input" maxlength="80" placeholder="写一句留给梦境大厅的话"></textarea>
                 </label>
 
-                <div class="profile-field full">
-                  <span class="profile-label">头像</span>
-                  <input id="profileAvatarInput" class="sr-only" type="file" accept="image/*" />
-                  <label class="avatar-upload" for="profileAvatarInput">
-                    <i class="fa-solid fa-arrow-up-from-bracket"></i>
-                    <span>上传头像</span>
-                  </label>
-                </div>
               </div>
 
               <div class="profile-actions">
@@ -195,14 +188,14 @@
       <p class="card-text dream-text"></p>
       <div class="dream-card-foot">
         <span class="dream-time"><i class="fa-regular fa-clock"></i><span class="dream-date"></span></span>
-        <span class="dream-social" aria-label="互动预留">
-          <span><i class="fa-regular fa-heart"></i>0</span>
-          <span><i class="fa-regular fa-comment"></i>0</span>
+        <span class="dream-social" aria-label="互动">
+          <button class="dream-social-button" type="button"><i class="fa-regular fa-heart"></i><span>0</span></button>
+          <button class="dream-social-button" type="button"><i class="fa-regular fa-comment"></i><span>0</span></button>
         </span>
       </div>
     </article>
   </template>
 
-  <script type="module" src="../app.js?v=20260729-profile-null-fix"></script>
+  <script type="module" src="../app.js?v=20260804-avatar-click"></script>
 </body>
 </html>

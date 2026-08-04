@@ -51,6 +51,10 @@ const VISIBLE_EMOTION_LIMIT = 4;
 const PROFILE_HANDLE_PATTERN = /^[a-z0-9_]{3,18}$/;
 const PROFILE_AVATAR_MAX_BYTES = 3 * 1024 * 1024;
 const PROFILE_AVATAR_SIZE = 320;
+const PROFILE_AVATAR_BUCKET = 'avatars';
+const PROFILE_AVATAR_QUALITY = 0.82;
+const COMMENT_MAX_LENGTH = 240;
+const COMMENT_VISIBLE_LIMIT = 80;
 const BASE_EMOTIONS = ['喜悦', '焦虑', '诡异', '科幻', '平静', '怀旧', '迷失', '浪漫', '荒诞', '清醒'];
 const ROUTES = {
   journal: '/',
@@ -104,7 +108,11 @@ const state = {
   dreamLoadError: '',
   authClientError: '',
   profile: null,
-  accountEmail: ''
+  accountEmail: '',
+  pendingAvatar: null,
+  interactionsUnavailable: false,
+  openDetailDreamId: '',
+  openDetailMode: 'square'
 };
 
 const emotionMeta = {
@@ -299,7 +307,7 @@ async function init() {
   setSession(data?.session || null);
   await ensureCurrentProfile();
   await initialDreamsLoad;
-  if (state.user) {
+  if (supabase) {
     await loadDreamsFromSupabase();
   }
 
@@ -427,6 +435,8 @@ function bindPageEvents() {
   });
 
   dom.profileForm?.addEventListener('submit', handleProfileSubmit);
+  dom.profileAvatarPreview?.addEventListener('click', openProfileAvatarPicker);
+  dom.profileAvatarPreview?.addEventListener('keydown', openProfileAvatarPicker);
   dom.profileAvatarInput?.addEventListener('change', handleAvatarInputChange);
   dom.profileHandle?.addEventListener('input', updateProfilePreviewFromForm);
   dom.profileDisplayName?.addEventListener('input', updateProfilePreviewFromForm);
@@ -629,10 +639,15 @@ function handleAccountButtonClick() {
 }
 
 function setSession(session) {
+  const previousUserId = state.user?.id || '';
+  const nextUser = session?.user || null;
   state.session = session;
-  state.user = session?.user || null;
+  state.user = nextUser;
   state.profile = null;
   state.accountEmail = '';
+  if (previousUserId !== (nextUser?.id || '')) {
+    state.pendingAvatar = null;
+  }
   renderAuthState();
 }
 
@@ -803,7 +818,8 @@ function renderProfilePage() {
   if (dom.profileSignature) dom.profileSignature.value = signature;
   if (dom.profileEmail) dom.profileEmail.value = getCurrentAuthEmail() || '未绑定';
 
-  renderAvatarElement(dom.profileAvatarPreview, getSafeAvatarUrl(profile.avatarUrl), getProfileInitial(accountName || publicHandle));
+  prepareProfileAvatarButton();
+  renderAvatarElement(dom.profileAvatarPreview, getProfilePreviewAvatarUrl(profile.avatarUrl), getProfileInitial(accountName || publicHandle));
   if (dom.profilePreviewName) dom.profilePreviewName.textContent = accountName;
   if (dom.profilePreviewHandle) dom.profilePreviewHandle.textContent = formatPublicHandle(publicHandle);
   if (dom.profilePreviewSignature) {
@@ -822,7 +838,26 @@ function updateProfilePreviewFromForm() {
   if (dom.profilePreviewName) dom.profilePreviewName.textContent = accountName;
   if (dom.profilePreviewHandle) dom.profilePreviewHandle.textContent = formatPublicHandle(publicHandle || getCurrentPublicHandle());
   if (dom.profilePreviewSignature) dom.profilePreviewSignature.textContent = signature || '还没有签名';
-  renderAvatarElement(dom.profileAvatarPreview, state.profile?.avatarUrl, getProfileInitial(accountName || publicHandle));
+  renderAvatarElement(dom.profileAvatarPreview, getProfilePreviewAvatarUrl(state.profile?.avatarUrl), getProfileInitial(accountName || publicHandle));
+}
+
+function prepareProfileAvatarButton() {
+  if (!dom.profileAvatarPreview) return;
+  dom.profileAvatarPreview.setAttribute('role', 'button');
+  dom.profileAvatarPreview.setAttribute('tabindex', '0');
+  dom.profileAvatarPreview.setAttribute('aria-label', '更换头像');
+}
+
+function openProfileAvatarPicker(event) {
+  if (event?.type === 'keydown' && !['Enter', ' '].includes(event.key)) return;
+  event?.preventDefault();
+
+  if (!state.user) {
+    openAuthModal();
+    return;
+  }
+
+  dom.profileAvatarInput?.click();
 }
 
 async function handleProfileSubmit(event) {
@@ -843,7 +878,7 @@ async function handleProfileSubmit(event) {
   const publicHandle = normalizeProfileHandle(dom.profileHandle?.value);
   const displayName = String(dom.profileDisplayName?.value || '').trim().slice(0, 24);
   const signature = String(dom.profileSignature?.value || '').trim().slice(0, 80);
-  const avatarUrl = getSafeAvatarUrl(state.profile?.avatarUrl);
+  let avatarUrl = getSafeAvatarUrl(state.profile?.avatarUrl);
 
   if (!PROFILE_HANDLE_PATTERN.test(publicHandle)) {
     setProfileMessage('ID 需要是 3-18 位小写英文、数字或下划线。', true);
@@ -862,6 +897,12 @@ async function handleProfileSubmit(event) {
       return;
     }
 
+    if (state.pendingAvatar) {
+      setProfileMessage('正在上传头像...');
+      avatarUrl = await persistProfileAvatar(avatarUrl);
+      setProfileMessage('正在保存...');
+    }
+
     const { data, error } = await supabase
       .from('profiles')
       .update({
@@ -878,6 +919,7 @@ async function handleProfileSubmit(event) {
     if (error) throw error;
 
     state.profile = rowToProfile(data, publicHandle);
+    state.pendingAvatar = null;
     dreams.forEach((dream) => {
       if (dream.userId === state.user.id) {
         dream.publicHandle = state.profile.publicHandle;
@@ -931,12 +973,9 @@ async function handleAvatarInputChange(event) {
   }
 
   try {
-    const avatarUrl = await createAvatarDataUrl(file);
-    state.profile = {
-      ...(state.profile || createFallbackProfile(generatePublicHandle(state.user?.id || state.user?.email))),
-      avatarUrl
-    };
-    renderAvatarElement(dom.profileAvatarPreview, avatarUrl, getProfileInitial(getCurrentDisplayName() || getCurrentPublicHandle()));
+    const avatar = await createAvatarAsset(file);
+    state.pendingAvatar = avatar;
+    renderAvatarElement(dom.profileAvatarPreview, avatar.dataUrl, getProfileInitial(getCurrentDisplayName() || getCurrentPublicHandle()));
     setProfileMessage('头像已预览，保存后生效。');
   } catch (error) {
     console.warn('Avatar preview failed:', error);
@@ -946,7 +985,7 @@ async function handleAvatarInputChange(event) {
   }
 }
 
-async function createAvatarDataUrl(file) {
+async function createAvatarAsset(file) {
   const sourceUrl = await readFileAsDataUrl(file);
   const image = await loadImage(sourceUrl);
   const canvas = document.createElement('canvas');
@@ -960,8 +999,14 @@ async function createAvatarDataUrl(file) {
   const side = Math.min(image.width, image.height);
   const sx = Math.max(0, (image.width - side) / 2);
   const sy = Math.max(0, (image.height - side) / 2);
+  context.fillStyle = '#fffaf0';
+  context.fillRect(0, 0, size, size);
   context.drawImage(image, sx, sy, side, side, 0, 0, size, size);
-  return canvas.toDataURL('image/jpeg', 0.86);
+  const blob = await canvasToBlob(canvas, 'image/jpeg', PROFILE_AVATAR_QUALITY);
+  return {
+    dataUrl: await readFileAsDataUrl(blob),
+    blob
+  };
 }
 
 function readFileAsDataUrl(file) {
@@ -980,6 +1025,52 @@ function loadImage(sourceUrl) {
     image.addEventListener('error', reject);
     image.src = sourceUrl;
   });
+}
+
+function canvasToBlob(canvas, type, quality) {
+  return new Promise((resolve, reject) => {
+    canvas.toBlob((blob) => {
+      if (blob) {
+        resolve(blob);
+      } else {
+        reject(new Error('Avatar export failed'));
+      }
+    }, type, quality);
+  });
+}
+
+async function persistProfileAvatar(currentAvatarUrl = '') {
+  const pendingAvatar = state.pendingAvatar;
+  const fallbackUrl = getSafeAvatarUrl(pendingAvatar?.dataUrl) || currentAvatarUrl;
+  if (!pendingAvatar?.blob || !supabase || !state.user) {
+    return fallbackUrl;
+  }
+
+  const cacheVersion = Date.now();
+  const avatarPath = `${state.user.id}/avatar.jpg`;
+  const { error } = await supabase.storage
+    .from(PROFILE_AVATAR_BUCKET)
+    .upload(avatarPath, pendingAvatar.blob, {
+      cacheControl: '31536000',
+      contentType: 'image/jpeg',
+      upsert: true
+    });
+
+  if (error) {
+    console.warn('Avatar storage upload failed:', error);
+    return fallbackUrl;
+  }
+
+  const { data } = supabase.storage
+    .from(PROFILE_AVATAR_BUCKET)
+    .getPublicUrl(avatarPath);
+
+  const publicUrl = getSafeAvatarUrl(data?.publicUrl);
+  return publicUrl ? `${publicUrl}?v=${cacheVersion}` : fallbackUrl;
+}
+
+function getProfilePreviewAvatarUrl(savedAvatarUrl = '') {
+  return getSafeAvatarUrl(state.pendingAvatar?.dataUrl) || getSafeAvatarUrl(savedAvatarUrl);
 }
 
 function setProfileMessage(message, isError = false) {
@@ -1365,6 +1456,7 @@ async function loadDreamsFromSupabase() {
   }
 
   hydrateDreamProfiles(rows);
+  hydrateDreamInteractions(rows);
 }
 
 async function fetchDreamRows() {
@@ -1466,6 +1558,63 @@ async function loadProfileHandles(rows) {
   ]));
 }
 
+async function hydrateDreamInteractions(rows) {
+  if (!supabase || state.interactionsUnavailable) return;
+
+  const dreamIds = [...new Set((rows || []).map((row) => String(row?.id || '')).filter(Boolean))];
+  if (!dreamIds.length) return;
+
+  try {
+    const countsRequest = supabase.rpc('get_dream_interaction_counts', {
+      dream_ids: dreamIds
+    });
+    const ownLikesRequest = state.user
+      ? supabase
+        .from('dream_likes')
+        .select('dream_id')
+        .eq('user_id', state.user.id)
+        .in('dream_id', dreamIds)
+      : Promise.resolve({ data: [], error: null });
+
+    const [countsResult, ownLikesResult] = await Promise.all([
+      countsRequest,
+      ownLikesRequest
+    ]);
+    const error = countsResult.error || ownLikesResult.error;
+    if (error) throw error;
+
+    const countsByDreamId = new Map((countsResult.data || []).map((row) => [
+      String(row.dream_id),
+      {
+        likeCount: normalizeCount(row.like_count),
+        commentCount: normalizeCount(row.comment_count)
+      }
+    ]));
+    const likedDreamIds = new Set((ownLikesResult.data || []).map((row) => String(row.dream_id)));
+    const targetIds = new Set(dreamIds);
+
+    dreams.forEach((dream) => {
+      if (!targetIds.has(dream.id)) return;
+      const counts = countsByDreamId.get(dream.id) || { likeCount: 0, commentCount: 0 };
+      if (dream.commentCount !== counts.commentCount) {
+        dream.commentsLoaded = false;
+        dream.comments = [];
+      }
+      dream.likeCount = counts.likeCount;
+      dream.commentCount = counts.commentCount;
+      dream.likedByMe = likedDreamIds.has(dream.id);
+    });
+
+    renderAll();
+    refreshOpenDetail();
+  } catch (error) {
+    if (isMissingInteractionTableError(error)) {
+      state.interactionsUnavailable = true;
+    }
+    console.warn('Dream interactions hydrate failed:', error);
+  }
+}
+
 async function saveDreamToSupabase(dream) {
   if (!state.profile) {
     await ensureCurrentProfile();
@@ -1511,11 +1660,31 @@ function rowToDream(row, profileHandles = new Map()) {
     displayName: profileData?.displayName || '',
     avatarUrl: profileData?.avatarUrl || '',
     createdAt: String(row.created_at || '') || new Date().toISOString(),
-    userId
+    userId,
+    likeCount: normalizeCount(row.like_count || row.likeCount),
+    commentCount: normalizeCount(row.comment_count || row.commentCount),
+    likedByMe: Boolean(row.liked_by_me || row.likedByMe),
+    likePending: false,
+    comments: [],
+    commentsLoaded: false,
+    commentsLoading: false
   };
 }
 
 function replaceDreams(nextDreams) {
+  const previousDreams = new Map(dreams.map((dream) => [dream.id, dream]));
+  nextDreams.forEach((dream) => {
+    const previous = previousDreams.get(dream.id);
+    if (!previous) return;
+
+    dream.likeCount = normalizeCount(previous.likeCount);
+    dream.commentCount = normalizeCount(previous.commentCount);
+    dream.likedByMe = Boolean(previous.likedByMe);
+    dream.likePending = Boolean(previous.likePending);
+    dream.comments = Array.isArray(previous.comments) ? previous.comments : [];
+    dream.commentsLoaded = Boolean(previous.commentsLoaded);
+    dream.commentsLoading = false;
+  });
   dreams.splice(0, dreams.length, ...nextDreams);
 }
 
@@ -1595,6 +1764,7 @@ function createDreamCard(dream, options = {}) {
   node.querySelector('.dream-handle').textContent = profile.handle;
   node.querySelector('.dream-date').innerHTML = formatDreamTimestampHtml(dream.createdAt);
   node.querySelector('.dream-text').textContent = dream.text;
+  renderDreamCardSocial(node, dream, options.mode || 'square');
 
   if (options.mode === 'history') {
     node.style.minHeight = 'auto';
@@ -1602,10 +1772,43 @@ function createDreamCard(dream, options = {}) {
 
   node.addEventListener('click', () => openDetail(dream, options.mode));
   node.addEventListener('keydown', (event) => {
-    if (event.key === 'Enter') openDetail(dream, options.mode);
+    if (event.key === 'Enter' && !event.target.closest('button')) {
+      openDetail(dream, options.mode);
+    }
   });
 
   return node;
+}
+
+function renderDreamCardSocial(node, dream, mode = 'square') {
+  const social = node.querySelector('.dream-social');
+  if (!social) return;
+
+  const likeIcon = dream.likedByMe ? 'fa-solid fa-heart' : 'fa-regular fa-heart';
+  const likeActive = dream.likedByMe ? ' active' : '';
+  const likePressed = dream.likedByMe ? 'true' : 'false';
+  const likeDisabled = dream.likePending ? ' disabled' : '';
+  social.setAttribute('aria-label', '互动');
+  social.innerHTML = `
+    <button class="dream-social-button${likeActive}" type="button" data-like-action aria-label="喜欢" aria-pressed="${likePressed}"${likeDisabled}>
+      <i class="${likeIcon}"></i><span>${formatInteractionCount(dream.likeCount)}</span>
+    </button>
+    <button class="dream-social-button" type="button" data-comment-action aria-label="评论">
+      <i class="fa-regular fa-comment"></i><span>${formatInteractionCount(dream.commentCount)}</span>
+    </button>
+  `;
+
+  social.querySelector('[data-like-action]')?.addEventListener('click', async (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    await toggleDreamLike(dream);
+  });
+
+  social.querySelector('[data-comment-action]')?.addEventListener('click', (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    openDetail(dream, mode, { focusComment: true });
+  });
 }
 
 function renderEmptySearch() {
@@ -1718,23 +1921,397 @@ function renderSearchResults(results) {
   });
 }
 
-function openDetail(dream, mode = 'square') {
+function openDetail(dream, mode = 'square', options = {}) {
   if (!dom.modalMeta || !dom.modalText || !dom.modalFoot || !dom.detailModal) return;
-  const meta = getEmotionMeta(dream.emotion);
+  const targetDream = findDreamById(dream.id) || dream;
+  const meta = getEmotionMeta(targetDream.emotion);
+  state.openDetailDreamId = targetDream.id;
+  state.openDetailMode = mode;
   dom.modalMeta.innerHTML = `
-    <span class="emotion-badge"><i class="${meta.icon}"></i>${escapeHtml(dream.emotion)}</span>
-    <span class="text-xs text-stone-500">${formatDate(dream.createdAt)}</span>
+    <span class="emotion-badge"><i class="${meta.icon}"></i>${escapeHtml(targetDream.emotion)}</span>
+    <span class="text-xs text-stone-500">${formatDate(targetDream.createdAt)}</span>
   `;
-  dom.modalText.textContent = dream.text;
-  dom.modalFoot.textContent = `${displayAuthor(dream, mode)} · ${dream.isPublic ? '匿名公开' : '仅自己可见'}`;
+  dom.modalText.textContent = targetDream.text;
+  renderDetailFoot(targetDream, mode, options);
   dom.detailModal.classList.add('open');
   dom.detailModal.setAttribute('aria-hidden', 'false');
+  loadDreamComments(targetDream);
 }
 
 function closeDetail() {
   if (!dom.detailModal) return;
   dom.detailModal.classList.remove('open');
   dom.detailModal.setAttribute('aria-hidden', 'true');
+  state.openDetailDreamId = '';
+}
+
+function renderDetailFoot(dream, mode = 'square', options = {}) {
+  if (!dom.modalFoot) return;
+
+  const likeIcon = dream.likedByMe ? 'fa-solid fa-heart' : 'fa-regular fa-heart';
+  const likeActive = dream.likedByMe ? ' active' : '';
+  const likePressed = dream.likedByMe ? 'true' : 'false';
+  const likeDisabled = dream.likePending ? ' disabled' : '';
+  const visibilityText = dream.isPublic ? '匿名公开' : '仅自己可见';
+
+  dom.modalFoot.innerHTML = `
+    <div class="detail-foot-meta">${escapeHtml(displayAuthor(dream, mode))} · ${visibilityText}</div>
+    <div class="detail-actions">
+      <button class="detail-social-button${likeActive}" type="button" data-detail-like-action aria-label="喜欢" aria-pressed="${likePressed}"${likeDisabled}>
+        <i class="${likeIcon}"></i>
+        <span>${formatInteractionCount(dream.likeCount)}</span>
+      </button>
+      <span class="detail-social-pill">
+        <i class="fa-regular fa-comment"></i>
+        <span>${formatInteractionCount(dream.commentCount)}</span>
+      </span>
+    </div>
+    <section class="comment-section" aria-label="评论">
+      <div class="comment-list">${renderCommentListHtml(dream)}</div>
+      <form id="commentForm" class="comment-form" autocomplete="off">
+        <textarea id="commentInput" name="comment" maxlength="${COMMENT_MAX_LENGTH}" placeholder="${state.user ? '写一条评论' : '登录后评论'}"></textarea>
+        <button class="comment-submit icon-button" type="submit" aria-label="发送评论">
+          <i class="fa-solid fa-paper-plane"></i>
+        </button>
+      </form>
+    </section>
+  `;
+
+  bindDetailInteractionEvents(dream, mode, options);
+}
+
+function bindDetailInteractionEvents(dream, mode, options = {}) {
+  dom.modalFoot.querySelector('[data-detail-like-action]')?.addEventListener('click', async (event) => {
+    event.preventDefault();
+    await toggleDreamLike(dream);
+  });
+
+  dom.modalFoot.querySelector('#commentForm')?.addEventListener('submit', async (event) => {
+    await submitDreamComment(event, dream);
+  });
+
+  dom.modalFoot.querySelectorAll('[data-delete-comment-id]').forEach((button) => {
+    button.addEventListener('click', async (event) => {
+      event.preventDefault();
+      await deleteDreamComment(button.dataset.deleteCommentId, dream);
+    });
+  });
+
+  if (options.focusComment) {
+    requestAnimationFrame(() => {
+      dom.modalFoot.querySelector('#commentInput')?.focus({ preventScroll: true });
+    });
+  }
+}
+
+function renderCommentListHtml(dream) {
+  if (dream.commentsLoading && !dream.commentsLoaded) {
+    return '<div class="comment-empty">正在读取评论...</div>';
+  }
+
+  const comments = Array.isArray(dream.comments) ? dream.comments : [];
+  if (!comments.length) {
+    return '<div class="comment-empty">暂无评论</div>';
+  }
+
+  return comments.map((comment) => renderCommentHtml(comment, dream)).join('');
+}
+
+function renderCommentHtml(comment, dream) {
+  const displayName = getCommentDisplayName(comment);
+  const handle = formatPublicHandle(comment.publicHandle || generatePublicHandle(comment.userId || comment.id));
+  const avatarUrl = getSafeAvatarUrl(comment.avatarUrl);
+  const avatarClass = avatarUrl ? 'comment-avatar has-image' : 'comment-avatar';
+  const avatarStyle = avatarUrl ? ` style="background-image:url('${avatarUrl.replace(/['"\\]/g, '')}')"` : '';
+  const deleteButton = canDeleteComment(comment, dream)
+    ? `<button class="comment-delete icon-button" type="button" data-delete-comment-id="${escapeHtml(comment.id)}" aria-label="删除评论"><i class="fa-regular fa-trash-can"></i></button>`
+    : '';
+
+  return `
+    <article class="comment-item">
+      <span class="${avatarClass}"${avatarStyle}>${avatarUrl ? '' : escapeHtml(getProfileInitial(displayName || handle))}</span>
+      <div class="comment-copy">
+        <div class="comment-head">
+          <span class="comment-author">${escapeHtml(displayName)}</span>
+          <span class="comment-handle">${escapeHtml(handle)}</span>
+          <span class="comment-date">${formatDate(comment.createdAt)}</span>
+          ${deleteButton}
+        </div>
+        <p>${escapeHtml(comment.body)}</p>
+      </div>
+    </article>
+  `;
+}
+
+function getCommentDisplayName(comment) {
+  const displayName = String(comment.displayName || '').trim();
+  if (displayName) return displayName;
+  if (state.user && comment.userId === state.user.id) {
+    return getCurrentDisplayName() || '我';
+  }
+  return `匿名 ${getDreamNumber(comment)}`;
+}
+
+function canDeleteComment(comment, dream) {
+  if (!state.user) return false;
+  return comment.userId === state.user.id || dream.userId === state.user.id;
+}
+
+async function loadDreamComments(dream) {
+  const target = findDreamById(dream.id) || dream;
+  if (!supabase || state.interactionsUnavailable || target.commentsLoading) return;
+
+  target.commentsLoading = true;
+  refreshOpenDetail();
+
+  try {
+    const { data, error, count } = await supabase
+      .from('dream_comments')
+      .select('id,dream_id,user_id,body,created_at', { count: 'exact' })
+      .eq('dream_id', target.id)
+      .order('created_at', { ascending: true })
+      .limit(COMMENT_VISIBLE_LIMIT);
+
+    if (error) throw error;
+
+    const profileHandles = await loadProfileHandles(data || []);
+    target.comments = (data || []).map((row) => rowToComment(row, profileHandles));
+    target.commentCount = normalizeCount(count ?? target.commentCount);
+    target.commentsLoaded = true;
+  } catch (error) {
+    if (isMissingInteractionTableError(error)) {
+      state.interactionsUnavailable = true;
+    }
+    console.warn('Dream comments load failed:', error);
+  } finally {
+    target.commentsLoading = false;
+    refreshOpenDetail();
+  }
+}
+
+async function submitDreamComment(event, dream) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const input = form.querySelector('#commentInput');
+  const body = String(input?.value || '').trim();
+
+  if (!body) {
+    input?.focus();
+    return;
+  }
+
+  if (body.length > COMMENT_MAX_LENGTH) {
+    showToast(`评论不能超过 ${COMMENT_MAX_LENGTH} 字`);
+    input?.focus();
+    return;
+  }
+
+  if (!(await ensureInteractionReady('评论'))) return;
+
+  const target = findDreamById(dream.id) || dream;
+  const submitButton = form.querySelector('button[type="submit"]');
+  submitButton.disabled = true;
+
+  try {
+    const { data, error } = await supabase
+      .from('dream_comments')
+      .insert({
+        dream_id: target.id,
+        user_id: state.user.id,
+        body
+      })
+      .select('id,dream_id,user_id,body,created_at')
+      .single();
+
+    if (error) throw error;
+
+    const comment = rowToComment(data, new Map([[state.user.id, {
+      publicHandle: getCurrentPublicHandle(),
+      displayName: getCurrentDisplayName(),
+      avatarUrl: getCurrentAvatarUrl()
+    }]]));
+    const comments = Array.isArray(target.comments) ? target.comments : [];
+    applyDreamInteractionPatch(target, {
+      comments: [...comments, comment],
+      commentsLoaded: true,
+      commentCount: normalizeCount(target.commentCount) + 1
+    });
+    form.reset();
+    showToast('评论已发布');
+  } catch (error) {
+    if (isMissingInteractionTableError(error)) {
+      state.interactionsUnavailable = true;
+    }
+    console.warn('Dream comment save failed:', error);
+    showToast(state.interactionsUnavailable ? '请先执行数据库迁移' : '评论发布失败');
+  } finally {
+    submitButton.disabled = false;
+  }
+}
+
+async function deleteDreamComment(commentId, dream) {
+  if (!commentId || !(await ensureInteractionReady('删除评论'))) return;
+
+  const target = findDreamById(dream.id) || dream;
+  const previousComments = Array.isArray(target.comments) ? target.comments : [];
+  const nextComments = previousComments.filter((comment) => comment.id !== commentId);
+  const previousCount = normalizeCount(target.commentCount);
+
+  applyDreamInteractionPatch(target, {
+    comments: nextComments,
+    commentCount: Math.max(0, previousCount - (previousComments.length === nextComments.length ? 0 : 1))
+  });
+
+  try {
+    const { error } = await supabase
+      .from('dream_comments')
+      .delete()
+      .eq('id', commentId);
+
+    if (error) throw error;
+    showToast('评论已删除');
+  } catch (error) {
+    console.warn('Dream comment delete failed:', error);
+    applyDreamInteractionPatch(target, {
+      comments: previousComments,
+      commentCount: previousCount
+    });
+    showToast('删除失败');
+  }
+}
+
+async function toggleDreamLike(dream) {
+  if (!(await ensureInteractionReady('喜欢'))) return;
+
+  const target = findDreamById(dream.id) || dream;
+  if (target.likePending) return;
+
+  const wasLiked = Boolean(target.likedByMe);
+  const previousCount = normalizeCount(target.likeCount);
+  const nextLiked = !wasLiked;
+
+  applyDreamInteractionPatch(target, {
+    likePending: true,
+    likedByMe: nextLiked,
+    likeCount: Math.max(0, previousCount + (nextLiked ? 1 : -1))
+  });
+
+  try {
+    const request = nextLiked
+      ? supabase
+        .from('dream_likes')
+        .insert({ dream_id: target.id, user_id: state.user.id })
+      : supabase
+        .from('dream_likes')
+        .delete()
+        .eq('dream_id', target.id)
+        .eq('user_id', state.user.id);
+    const { error } = await request;
+
+    if (error && !(nextLiked && isDuplicateInteractionError(error))) {
+      throw error;
+    }
+    applyDreamInteractionPatch(target, {
+      likePending: false
+    });
+  } catch (error) {
+    if (isMissingInteractionTableError(error)) {
+      state.interactionsUnavailable = true;
+    }
+    console.warn('Dream like toggle failed:', error);
+    applyDreamInteractionPatch(target, {
+      likePending: false,
+      likedByMe: wasLiked,
+      likeCount: previousCount
+    });
+    showToast(state.interactionsUnavailable ? '请先执行数据库迁移' : '操作失败');
+  }
+}
+
+async function ensureInteractionReady(actionLabel) {
+  if (!supabase) {
+    openAuthModal();
+    showToast('先连接 Supabase');
+    return false;
+  }
+
+  if (!state.user) {
+    openAuthModal();
+    showToast(`登录后才能${actionLabel}`);
+    return false;
+  }
+
+  if (state.interactionsUnavailable) {
+    showToast('请先执行数据库迁移');
+    return false;
+  }
+
+  if (!state.profile) {
+    await ensureCurrentProfile();
+  }
+
+  return Boolean(state.profile);
+}
+
+function applyDreamInteractionPatch(dream, patch) {
+  const target = findDreamById(dream.id) || dream;
+  Object.assign(target, patch);
+  if (target !== dream) {
+    Object.assign(dream, patch);
+  }
+  renderAll();
+  refreshOpenDetail();
+}
+
+function rowToComment(row, profileHandles = new Map()) {
+  const userId = row.user_id || '';
+  const profile = userId ? profileHandles.get(userId) : null;
+
+  return {
+    id: String(row.id),
+    dreamId: String(row.dream_id),
+    userId,
+    body: String(row.body || '').trim(),
+    createdAt: String(row.created_at || '') || new Date().toISOString(),
+    publicHandle: profile?.publicHandle || '',
+    displayName: profile?.displayName || '',
+    avatarUrl: profile?.avatarUrl || ''
+  };
+}
+
+function refreshOpenDetail() {
+  if (!state.openDetailDreamId || !dom.detailModal?.classList.contains('open')) return;
+  const dream = findDreamById(state.openDetailDreamId);
+  if (dream) {
+    renderDetailFoot(dream, state.openDetailMode);
+  }
+}
+
+function findDreamById(dreamId) {
+  const id = String(dreamId || '');
+  return dreams.find((dream) => dream.id === id) || null;
+}
+
+function normalizeCount(value) {
+  const count = Number(value);
+  return Number.isFinite(count) && count > 0 ? Math.floor(count) : 0;
+}
+
+function formatInteractionCount(value) {
+  const count = normalizeCount(value);
+  if (count < 1000) return String(count);
+  return `${(count / 1000).toFixed(count < 10000 ? 1 : 0)}k`;
+}
+
+function isDuplicateInteractionError(error) {
+  return /duplicate|23505|dream_likes_pkey/i.test(getErrorMessage(error));
+}
+
+function isMissingInteractionTableError(error) {
+  const code = String(error?.code || '').toUpperCase();
+  const message = getErrorMessage(error);
+  return ['42P01', '42883', 'PGRST202', 'PGRST204'].includes(code)
+    || /schema cache|does not exist|could not find (the )?(table|function)|relation .* does not exist|function .* does not exist/i.test(message);
 }
 
 function displayAuthor(dream, mode = 'square') {
